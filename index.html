@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sinese Limpiezas</title>
+<meta name="theme-color" content="#1F3628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sinese">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{
+  --bg:#EDEEE6; --surface:#F8F8F3; --fg:#1F3628; --muted:#5E6F63; --line:#CBD5CB;
+  --brand:#1F3628; --on-brand:#EDEEE6; --gold:#8A6A2C; --gold-soft:#C8A96E;
+  --pend:#9A4B1E; --pend-bg:#F3DCCB; --work:#7A5A12; --work-bg:#F1E3BF; --done:#1F5B38; --done-bg:#CFE3D2;
+  --plan:#4A5D50; --plan-bg:#DCE4DC;
+  --title:Georgia,"Times New Roman",serif; --body:Arial,Helvetica,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#101C15; --surface:#1F3628; --fg:#EDEEE6; --muted:#A9BBAB; --line:#35503F;
+  --brand:#C8A96E; --on-brand:#14231A; --gold:#C8A96E; --gold-soft:#C8A96E;
+  --pend:#F0B58E; --pend-bg:#4A2A17; --work:#EBCF8A; --work-bg:#463A16; --done:#A8DDB5; --done-bg:#1F4A2E;
+  --plan:#C5D3C7; --plan-bg:#2C4636; color-scheme:dark } }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px}
+.top{background:var(--brand);color:var(--on-brand);padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.top b{font-family:var(--title);font-weight:normal;font-size:20px;display:block}
+.top span{font-size:13px;opacity:.85}
+.top button{background:transparent;border:1px solid currentColor;color:inherit;border-radius:6px;padding:8px 12px;opacity:.9}
+.wrap{max-width:620px;margin:0 auto;padding:0 16px calc(48px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+h1{font-family:var(--title);font-weight:normal;font-size:26px;margin:24px 0 0}
+h2{font-family:var(--title);font-weight:normal;font-size:20px;margin:12px 0 0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;padding-top:12px}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:9px 16px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
+select,input,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px;min-width:0;max-width:100%}
+.weeknav{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px}
+.wk{border:1px solid var(--line);background:transparent;border-radius:6px;width:44px;height:40px;font-size:22px;cursor:pointer}
+.wk:disabled{opacity:.35}
+.days{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line)}
+.day{border:0;background:transparent;padding:8px 0 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;border-bottom:3px solid transparent;font-variant-numeric:tabular-nums}
+.day small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.day b{font-size:17px;font-weight:normal}
+.day i{font-style:normal;font-size:11px;color:var(--muted)}
+.day[aria-pressed="true"]{border-bottom-color:var(--gold-soft)}
+.day[aria-pressed="true"] b{font-weight:bold}
+.day.hoy b{color:var(--gold)}
+.sum{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.piso{border:1px solid var(--line);border-left:6px solid var(--plan);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.piso.pend,.piso.pasado{border-left-color:var(--pend)} .piso.dentro{border-left-color:var(--work)} .piso.hecho{border-left-color:var(--done)}
+.row{display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.row > div{min-width:0}
+.name{font-family:var(--title);font-size:19px;overflow-wrap:anywhere}
+.meta{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.urg{color:var(--pend);font-weight:bold;font-size:14px}
+.ok{color:var(--done)}
+.new{color:var(--gold);font-weight:bold;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.pill{flex:none;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:bold;white-space:nowrap;background:var(--plan-bg);color:var(--plan)}
+.pend .pill,.pasado .pill{background:var(--pend-bg);color:var(--pend)} .dentro .pill{background:var(--work-bg);color:var(--work)} .hecho .pill{background:var(--done-bg);color:var(--done)}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{border:1px solid var(--brand);background:var(--brand);color:var(--on-brand);border-radius:6px;padding:13px 16px;font-weight:bold;cursor:pointer;flex:1 1 120px}
+.btn.big{padding:18px 16px;font-size:18px}
+.btn.sec{background:transparent;color:var(--fg);border-color:var(--line);font-weight:normal}
+.btn.slim{flex:none}
+.btn:disabled{opacity:.5}
+.inc{font-size:14px;border-top:1px dashed var(--line);padding-top:8px;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:4px}
+.incform{display:flex;gap:8px}
+.incform input{flex:1}
+.paxl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.paxl input{width:64px}
+.acts select{min-width:150px}
+.addform{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.addform label,.login label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+.addform .full{grid-column:1/-1}
+.empty{border:1px dashed var(--line);border-radius:6px;padding:18px;color:var(--muted)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}
+th,td{text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:normal}
+tbody th{font-weight:normal}
+td.n{text-align:center;padding-right:4px}
+.login{display:flex;flex-direction:column;gap:12px}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.names .btn{flex:none}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:12px 14px;border-radius:6px;text-align:center;z-index:5}
+</style>
+</head>
+<body>
+<header class="top">
+  <div><b id="t-tit">Sinese Limpiezas</b><span id="t-sub">Sinese Premium Apartments</span></div>
+  <button type="button" id="b-salir" hidden>Salir</button>
+</header>
+<main class="wrap" id="app"><p class="sum" style="padding-top:24px">Cargando…</p></main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const U="https://tawscuabdfwahwphxjbw.supabase.co/rest/v1/rpc/";
+const K="sb_publishable_31CCY-vJ07kyo-re0eVDRQ_moovTRpl";
+const TZ="Europe/Madrid", DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+async function rpc(f,b){
+  const r=await fetch(U+f,{method:"POST",headers:{apikey:K,"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+  if(!r.ok) throw new Error("red");
+  return r.json();
+}
+let toastT=null;
+function toast(m){ const t=$("toast"); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{t.hidden=true},4000); }
+
+// Fechas como texto AAAA-MM-DD, calculadas en UTC para que no dependan del móvil.
+const pd=s=>new Date(s+"T00:00:00Z");
+const fd=d=>d.toISOString().slice(0,10);
+const add=(s,n)=>{const d=pd(s);d.setUTCDate(d.getUTCDate()+n);return fd(d)};
+const dow=s=>(pd(s).getUTCDay()+6)%7;
+const largo=s=>pd(s).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",timeZone:"UTC"});
+const corta=s=>DIAS[dow(s)].toLowerCase()+" "+pd(s).getUTCDate();
+const hm=t=>new Intl.DateTimeFormat("es-ES",{timeZone:TZ,hour:"2-digit",minute:"2-digit"}).format(new Date(t));
+const fm=m=>{m=Math.round(m);return m<60?m+" min":Math.floor(m/60)+" h"+(m%60?" "+String(m%60).padStart(2,"0"):"")};
+const durm=ms=>{const m=Math.max(0,Math.round(ms/60000));return m<1?"menos de 1 min":fm(m)};
+
+let ses=null, D=null, sem=0, dia=null, vista=null, paso={n:null}, cargando=false, armado=null;
+try{ ses=JSON.parse(store.get("sinese-sesion")||"null"); }catch(e){ ses=null; }
+
+const piso=id=>D.pisos.find(p=>p.id===id)||{nombre:"Piso",otra_zona:false};
+const pers=id=>D.personas.find(p=>p.id===id);
+const equipo=()=>D.personas.filter(p=>p.rol==="limpiadora"||p.rol==="encargada");
+const devac=(pid,f)=>D.vacaciones.some(v=>v.persona_id===pid&&f>=v.desde&&f<=v.hasta);
+const jefe=()=>D.yo.rol==="admin"||D.yo.rol==="encargada";
+const gestiona=t=>D.yo.rol==="admin"||(D.yo.rol==="encargada"&&!piso(t.piso_id).otra_zona);
+const est=t=>t.salgo?"hecho":t.entro?"dentro":t.fecha===D.hoy?"pend":t.fecha<D.hoy?"pasado":"plan";
+const LAB={plan:"Previsto",pend:"Pendiente",dentro:"Dentro",hecho:"Listo",pasado:"Sin marcar"};
+const ORD={pend:0,pasado:0,plan:0,dentro:1,hecho:2};
+const npers=n=>n+(n===1?" persona":" personas");
+const sale=t=>piso(t.piso_id).sale?"Salen a las "+piso(t.piso_id).sale:"Salida: hora por confirmar";
+function entra(t){
+  const h=piso(t.piso_id).entra;
+  if(t.pax===0) return "Ese día no entra nadie"+(t.prox_fecha?" · próxima entrada el "+corta(t.prox_fecha)+(t.prox_pax!=null?" ("+npers(t.prox_pax)+")":""):"");
+  const q=t.pax==null?"personas por confirmar":npers(t.pax);
+  return h?"Entran "+q+" a las "+h:"Entran "+q+" · hora por confirmar";
+}
+function hueco(t){ const p=piso(t.piso_id); if(t.pax===0||!p.sale||!p.entra) return ""; const m=(+p.entra.slice(0,2)*60+ +p.entra.slice(3))-(+p.sale.slice(0,2)*60+ +p.sale.slice(3)); return "Hueco para limpiar: "+fm(m); }
+const prevTxt=t=>{const p=piso(t.piso_id);return !p.max?"":p.min===p.max?fm(p.min):fm(p.min)+" a "+fm(p.max)};
+const prev=t=>prevTxt(t)?"Limpieza prevista: "+prevTxt(t):"";
+function desfase(t){ const p=piso(t.piso_id); if(!t.salgo||!t.entro||!p.max) return null; const r=(new Date(t.salgo)-new Date(t.entro))/60000; return r>p.max?Math.round(r-p.max):r<p.min?-Math.round(p.min-r):0; }
+const desTxt=d=>d===null?"":d>0?"+"+fm(d)+" sobre lo previsto":d<0?fm(-d)+" menos de lo previsto":"En tiempo";
+const corto=t=>{const p=piso(t.piso_id);return (p.sale||"?")+"–"+(t.pax===0?"sin entrada":(p.entra||"?")+" · "+(t.pax==null?"?":t.pax)+" pers.")};
+const horas=t=>[t.entro&&"Entra "+hm(t.entro),t.salgo&&"Sale "+hm(t.salgo),t.salgo&&t.entro&&"Tarda "+durm(new Date(t.salgo)-new Date(t.entro))].filter(Boolean).join(" · ");
+const incs=t=>t.inc.length?`<div class="inc">${t.inc.map(i=>`<div><strong>Incidencia ${hm(i.creado)}${i.quien?" · "+esc(i.quien):""}:</strong> ${esc(i.texto)}</div>`).join("")}</div>`:"";
+const clave=t=>t.pax===0?"99":(piso(t.piso_id).entra||"98");
+const orden=(a,b)=>ORD[est(a)]-ORD[est(b)]||clave(a).localeCompare(clave(b))||piso(a.piso_id).nombre.localeCompare(piso(b.piso_id).nombre,"es");
+const info=t=>`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
+const lunes=()=>add(add(D?D.hoy:fd(new Date()),-dow(D?D.hoy:fd(new Date()))),7*sem);
+
+async function cargar(silencio){
+  if(!ses||cargando) return;
+  cargando=true;
+  try{
+    const hoy0=D?D.hoy:new Intl.DateTimeFormat("en-CA",{timeZone:TZ}).format(new Date());
+    const l=add(add(hoy0,-dow(hoy0)),7*sem);
+    const r=await rpc("datos",{p_token:ses.token,p_desde:l,p_hasta:add(l,6)});
+    if(r.error){ ses=null; D=null; store.del("sinese-sesion"); pintarLogin(); return; }
+    D=r;
+    if(!vista) vista=D.yo.rol==="limpiadora"?"mios":"plan";
+    if(!dia||dia<l||dia>add(l,6)) dia=(D.hoy>=l&&D.hoy<=add(l,6))?D.hoy:l;
+    const a=document.activeElement;
+    if(silencio&&a&&$("app").contains(a)&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    pintar();
+  }catch(e){ if(!silencio) toast("Sin conexión. Vuelve a intentarlo."); if(!D) $("app").innerHTML='<p class="empty" style="margin-top:24px">No se ha podido cargar. Comprueba la conexión y vuelve a abrir la app.</p>'; }
+  finally{ cargando=false; }
+}
+async function hacer(f,b){
+  try{ const r=await rpc(f,Object.assign({p_token:ses.token},b)); if(r.error){ toast(r.error==="sesion"?"La sesión ha caducado. Entra de nuevo.":r.error); } }
+  catch(e){ toast("Sin conexión. No se ha guardado."); }
+  await cargar(false);
+}
+
+/* ---------- Entrada con PIN ---------- */
+async function pintarLogin(){
+  $("b-salir").hidden=true; $("t-tit").textContent="Sinese Limpiezas"; $("t-sub").textContent="Sinese Premium Apartments";
+  const app=$("app");
+  if(!paso.n){
+    app.innerHTML='<h1>¿Quién eres?</h1><p class="sum">Cargando…</p>';
+    let l; try{ l=await rpc("lista_personas"); }catch(e){ app.innerHTML='<h1>¿Quién eres?</h1><p class="empty">Sin conexión. Comprueba internet y vuelve a abrir la app.</p>'; return; }
+    paso.lista=l;
+    app.innerHTML=`<h1>¿Quién eres?</h1><div class="names">${l.map(p=>`<button type="button" class="btn sec" data-n="${esc(p.nombre)}">${esc(p.nombre)}</button>`).join("")}</div>`;
+    return;
+  }
+  const p=paso.lista.find(x=>x.nombre===paso.n), nuevo=!p.tiene_pin;
+  app.innerHTML=`<h1>Hola, ${esc(paso.n)}</h1>
+  <form class="login" id="f-login" autocomplete="off">
+    <p class="sum">${nuevo?"Es tu primera vez. Elige un PIN de 4 a 8 cifras; lo usarás para entrar siempre.":"Escribe tu PIN."}</p>
+    <label>${nuevo?"Tu PIN nuevo":"PIN"}<input id="pin1" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required autocomplete="off"></label>
+    ${nuevo?'<label>Repite el PIN<input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="8" required autocomplete="off"></label>':""}
+    <div class="acts"><button class="btn" type="submit">Entrar</button><button class="btn sec" type="button" id="b-otro">No soy ${esc(paso.n)}</button></div>
+    <p class="sum">Si has olvidado el PIN, pide a administración que te lo restablezca.</p>
+  </form>`;
+  $("pin1").focus();
+}
+
+/* ---------- Pantallas ---------- */
+function pintar(){
+  $("b-salir").hidden=false;
+  const l=lunes(), dias=[0,1,2,3,4,5,6].map(i=>add(l,i));
+  const rol=D.yo.rol, tabs=rol==="admin"?[["plan","Planning"],["equipo","Equipo"]]:rol==="encargada"?[["plan","Planning"],["mios","Mis pisos"]]:[];
+  $("t-tit").textContent=vista==="mios"?"Hola, "+D.yo.nombre:vista==="equipo"?"Equipo":"Planning de limpiezas";
+  $("t-sub").textContent=D.yo.nombre+" · "+(vista==="equipo"?"administración":largo(dia)+(dia===D.hoy?" · hoy":""));
+  let h="";
+  if(tabs.length) h+=`<div class="tabs">${tabs.map(([k,n])=>`<button type="button" class="chip" data-vista="${k}" aria-pressed="${k===vista}">${n}</button>`).join("")}</div>`;
+  if(vista==="equipo"){ $("app").innerHTML=h+pintarEquipo(); return; }
+  const mia=t=>vista==="mios"?t.limpiadora_id===D.yo.id:(rol==="admin"||!piso(t.piso_id).otra_zona);
+  const cuenta=f=>D.tareas.filter(t=>t.fecha===f&&mia(t)).length;
+  const f0=pd(dias[0]), f6=pd(dias[6]);
+  h+=`<div class="weeknav" style="padding-top:${tabs.length?0:12}px"><button type="button" class="wk" id="wk-prev" aria-label="Semana anterior" ${sem<=-4?"disabled":""}>‹</button><span>${sem===0?"Esta semana":sem===1?"Semana próxima":sem===-1?"Semana pasada":sem>0?"Dentro de "+sem+" semanas":"Hace "+(-sem)+" semanas"} · ${f0.getUTCDate()}${f0.getUTCMonth()!==f6.getUTCMonth()?" "+f0.toLocaleDateString("es-ES",{month:"short",timeZone:"UTC"}):""} al ${f6.getUTCDate()} ${f6.toLocaleDateString("es-ES",{month:"short",timeZone:"UTC"})}</span><button type="button" class="wk" id="wk-next" aria-label="Semana siguiente" ${sem>=8?"disabled":""}>›</button></div>`;
+  h+=`<div class="days">${dias.map((f,i)=>`<button type="button" class="day${f===D.hoy?" hoy":""}" data-dia="${f}" aria-pressed="${f===dia}" aria-label="${largo(f)}, ${cuenta(f)} pisos"><small>${DIAS[i]}</small><b>${pd(f).getUTCDate()}</b><i>${cuenta(f)||"·"}</i></button>`).join("")}</div>`;
+  const delDia=D.tareas.filter(t=>t.fecha===dia&&mia(t));
+  h+=vista==="mios"?pintarMios(delDia,dias):pintarPlan(delDia,dias);
+  $("app").innerHTML=h;
+}
+
+function opcionesEquipo(sel,f){
+  return `<option value="">Sin asignar</option>`+equipo().map(p=>`<option value="${p.id}"${p.id===sel?" selected":""}${devac(p.id,f)&&p.id!==sel?" disabled":""}>${esc(p.nombre)}${devac(p.id,f)?" (vacaciones)":""}</option>`).join("");
+}
+
+function pintarPlan(delDia,dias){
+  let h="";
+  const sin=delDia.filter(t=>!t.limpiadora_id).length;
+  if(dia===D.hoy){ const k={pend:0,dentro:0,hecho:0}; delDia.forEach(t=>k[est(t)]++); h+=`<div class="sum">${k.hecho} de ${delDia.length} listos para check-in · ${k.dentro} en limpieza · ${k.pend} pendientes${sin?" · "+sin+" sin asignar":""}</div>`; }
+  else h+=`<div class="sum">${delDia.length} limpiezas este día · ${sin?sin+" sin asignar":"todas asignadas"}</div>`;
+  const vac=equipo().filter(p=>devac(p.id,dia)); if(vac.length) h+=`<div class="sum">De vacaciones este día: ${vac.map(p=>esc(p.nombre)).join(", ")}</div>`;
+  if(!delDia.length) h+=`<div class="empty">No hay limpiezas este día. Añade un piso con el formulario de abajo.</div>`;
+  h+=[...delDia].sort((a,b)=>(a.limpiadora_id?1:0)-(b.limpiadora_id?1:0)||orden(a,b)).map(t=>{
+    const e=est(t), z=piso(t.piso_id), d=desfase(t), q=pers(t.limpiadora_id);
+    const ctl=gestiona(t)?`<div class="acts"><label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label><select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
+    return `<article class="piso ${e}">
+      <div class="row"><div>${z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}
+      ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}</div>
+      <span class="pill">${!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
+      ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
+  }).join("");
+  const pisosForm=D.pisos.filter(p=>D.yo.rol==="admin"||!p.otra_zona);
+  h+=`<h2>Añadir una limpieza</h2><form class="addform" id="addform">
+    <label class="full">Piso<select id="n-piso" required><option value="">Elige un piso</option>${pisosForm.map(p=>`<option value="${p.id}">${esc(p.nombre)}${p.otra_zona?" (otra zona)":""}</option>`).join("")}</select></label>
+    <label>Personas que entran<input id="n-pax" type="number" min="0" max="30" step="1" value="2" inputmode="numeric" placeholder="?"></label>
+    <label>Limpia<select id="n-quien">${opcionesEquipo(null,dia)}</select></label>
+    <button class="btn full" type="submit">Añadir al ${esc(largo(dia).split(",")[0])} ${pd(dia).getUTCDate()}</button></form>
+    <div class="sum">Deja las personas en blanco si aún no se sabe, o pon 0 si ese día no entra nadie.</div>`;
+  const cont=(pid,f)=>D.tareas.filter(t=>t.limpiadora_id===pid&&(f?t.fecha===f:true)).length;
+  h+=`<h2>Reparto de la semana</h2><div class="tw"><table><thead><tr><th scope="col">Pisos</th>${DIAS.map(d=>`<th scope="col">${d[0]}</th>`).join("")}<th scope="col">Tot.</th></tr></thead><tbody>${equipo().map(p=>`<tr><th scope="row">${esc(p.nombre)}</th>${dias.map(f=>`<td class="n">${cont(p.id,f)||(devac(p.id,f)?"V":"·")}</td>`).join("")}<td class="n"><strong>${cont(p.id)}</strong></td></tr>`).join("")}</tbody></table></div>`;
+  const hechos=delDia.filter(t=>t.salgo&&t.entro);
+  if(hechos.length){
+    h+=`<h2>Desfase por piso</h2><div class="tw"><table><thead><tr><th scope="col">Piso</th><th scope="col">Previsto</th><th scope="col">Real</th><th scope="col">Desfase</th></tr></thead><tbody>${hechos.map(t=>{const d=desfase(t),q=pers(t.limpiadora_id);return `<tr><th scope="row">${esc(piso(t.piso_id).nombre)}<br><span class="meta">${esc(q?q.nombre:"")}</span></th><td>${prevTxt(t)||"Sin dato"}</td><td>${durm(new Date(t.salgo)-new Date(t.entro))}</td><td class="${d>0?"urg":d===0?"ok":""}">${d===null?"—":d>0?"+"+fm(d):d<0?"−"+fm(-d):"En tiempo"}</td></tr>`}).join("")}</tbody></table></div>`;
+    h+=`<h2>Tiempos por limpiadora</h2><div class="tw"><table><thead><tr><th scope="col">Limpiadora</th><th scope="col">Pisos</th><th scope="col">Total</th><th scope="col">Desfase</th></tr></thead><tbody>${equipo().map(p=>{const f=hechos.filter(t=>t.limpiadora_id===p.id); if(!f.length) return ""; const tot=f.reduce((s,t)=>s+(new Date(t.salgo)-new Date(t.entro)),0), ds=f.map(desfase).filter(x=>x!==null), sd=ds.reduce((a,b)=>a+b,0); return `<tr><th scope="row">${esc(p.nombre)}</th><td>${f.length}</td><td>${durm(tot)}</td><td>${!ds.length?"—":sd>0?"+"+fm(sd):sd<0?"−"+fm(-sd):"En tiempo"}</td></tr>`}).join("")}</tbody></table></div>`;
+  }
+  return h;
+}
+
+function pintarMios(delDia,dias){
+  let h="";
+  const mios=[...delDia].sort(orden);
+  if(!mios.length) h+=`<div class="empty">${devac(D.yo.id,dia)?"Estás de vacaciones este día.":"No tienes pisos asignados este día."}</div>`;
+  else h+=`<div class="sum">${mios.length} ${mios.length===1?"piso":"pisos"}${dia===D.hoy?" · "+mios.filter(t=>t.salgo).length+" terminados":""}</div>`;
+  h+=mios.map(t=>{
+    const e=est(t), z=piso(t.piso_id), hoy=t.fecha===D.hoy;
+    const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
+    return `<article class="piso ${e}">
+      <div class="row"><div>${t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
+      ${incs(t)}${b?`<div class="acts">${b}</div>`:""}
+      <form class="incform" data-id="${t.id}"><input id="inc-${t.id}" maxlength="500" aria-label="Incidencia en ${esc(z.nombre)}" placeholder="Escribe una incidencia"><button class="btn sec slim" type="submit">Enviar</button></form>
+    </article>`;
+  }).join("");
+  h+=`<h2>Tu semana</h2><div class="tw"><table><tbody>${dias.map(f=>{const l=D.tareas.filter(t=>t.fecha===f&&t.limpiadora_id===D.yo.id).sort(orden);
+    return `<tr><th scope="row" style="white-space:nowrap">${f===D.hoy?"<strong>":""}${esc(largo(f).split(" de ")[0])}${f===D.hoy?"</strong>":""}</th><td>${l.length?l.map(t=>esc(piso(t.piso_id).nombre)+" ("+corto(t)+")").join("<br>"):devac(D.yo.id,f)?"Vacaciones":"Libre"}</td></tr>`}).join("")}</tbody></table></div>
+    <div class="sum">Entre paréntesis, la hora a la que salen los huéspedes, la hora a la que entran los siguientes y cuántas personas son.</div>`;
+  return h;
+}
+
+function pintarEquipo(){
+  return `<p class="sum">Si alguien olvida su PIN, restablécelo aquí: la próxima vez que entre elegirá uno nuevo.</p>`+
+    D.personas.map(p=>`<article class="piso"><div class="row"><div><div class="name">${esc(p.nombre)}</div><div class="meta">${p.rol==="admin"?"Administración":p.rol==="encargada"?"Encargada":"Limpiadora"} · ${p.tiene_pin?"con PIN":"aún no ha entrado"}</div></div></div>
+    ${p.tiene_pin&&p.id!==D.yo.id?`<div class="acts"><button type="button" class="btn sec" data-a="reset" data-id="${p.id}">${armado==="r"+p.id?"Confirmar: borrar su PIN":"Restablecer PIN"}</button></div>`:""}</article>`).join("");
+}
+
+/* ---------- Acciones ---------- */
+$("app").addEventListener("click",async e=>{
+  const n=e.target.closest("[data-n]"); if(n){ paso.n=n.dataset.n; pintarLogin(); return; }
+  if(e.target.id==="b-otro"){ paso.n=null; pintarLogin(); return; }
+  if(!D) return;
+  const v=e.target.closest("[data-vista]"); if(v){ vista=v.dataset.vista; armado=null; pintar(); return; }
+  const d=e.target.closest("[data-dia]"); if(d){ dia=d.dataset.dia; armado=null; pintar(); return; }
+  if(e.target.id==="wk-prev"||e.target.id==="wk-next"){ sem+=e.target.id==="wk-next"?1:-1; dia=null; armado=null; await cargar(false); return; }
+  const b=e.target.closest("[data-a]"); if(!b) return;
+  const a=b.dataset.a, id=+b.dataset.id;
+  const confirma=k=>{ if(armado===k){ armado=null; return true; } armado=k; pintar(); return false; };
+  if(a==="entro"||a==="salgo"){ b.disabled=true; await hacer("marcar",{p_tarea:id,p_accion:a}); }
+  else if(a==="corregir"){ if(confirma("c"+id)) await hacer("marcar",{p_tarea:id,p_accion:"corregir"}); }
+  else if(a==="quitar"){ if(confirma("q"+id)) await hacer("quitar_tarea",{p_tarea:id}); }
+  else if(a==="reset"){ if(confirma("r"+id)) await hacer("reset_pin",{p_persona:id}); }
+});
+$("app").addEventListener("change",async e=>{
+  if(!D) return;
+  const x=e.target.closest("[data-pax]");
+  if(x){ const v=x.value.trim(); await hacer("editar_tarea",{p_tarea:+x.dataset.pax,p_cambios:{pax:v===""?null:Math.max(0,Math.round(+v)||0)}}); return; }
+  const s=e.target.closest("[data-asig]");
+  if(s){ await hacer("editar_tarea",{p_tarea:+s.dataset.asig,p_cambios:{limpiadora_id:s.value===""?null:+s.value}}); }
+});
+$("app").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const f=e.target;
+  if(f.id==="f-login"){
+    const p1=$("pin1").value.trim(), p2=$("pin2")?$("pin2").value.trim():p1;
+    if(!/^[0-9]{4,8}$/.test(p1)){ toast("El PIN debe tener entre 4 y 8 cifras."); return; }
+    if(p1!==p2){ toast("Los dos PIN no coinciden."); return; }
+    let r; try{ r=await rpc("entrar",{p_nombre:paso.n,p_pin:p1}); }catch(err){ toast("Sin conexión. Vuelve a intentarlo."); return; }
+    if(r.error){ toast(r.error); return; }
+    ses={token:r.token}; store.set("sinese-sesion",JSON.stringify(ses)); paso={n:null}; vista=null; dia=null; sem=0;
+    $("app").innerHTML='<p class="sum" style="padding-top:24px">Cargando…</p>'; await cargar(false); return;
+  }
+  if(!D) return;
+  if(f.id==="addform"){
+    const p=$("n-piso").value, v=$("n-pax").value.trim(), q=$("n-quien").value;
+    if(!p){ toast("Elige un piso."); return; }
+    await hacer("nueva_tarea",{p_fecha:dia,p_piso:+p,p_pax:v===""?null:Math.max(0,Math.round(+v)||0),p_limpiadora:q===""?null:+q}); return;
+  }
+  if(f.classList.contains("incform")){
+    const i=f.querySelector("input"), v=i.value.trim(); if(!v) return;
+    i.blur(); await hacer("incidencia",{p_tarea:+f.dataset.id,p_texto:v});
+  }
+});
+$("b-salir").addEventListener("click",async()=>{
+  const t=ses&&ses.token; ses=null; D=null; vista=null; store.del("sinese-sesion"); paso={n:null}; pintarLogin();
+  if(t){ try{ await rpc("salir",{p_token:t}); }catch(e){} }
+});
+setInterval(()=>{ if(ses&&D&&!document.hidden) cargar(true); },30000);
+document.addEventListener("visibilitychange",()=>{ if(ses&&D&&!document.hidden) cargar(true); });
+
+if(ses&&ses.token) cargar(false); else pintarLogin();
+})();
+</script>
+</body>
+</html>
