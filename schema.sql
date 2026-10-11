@@ -261,3 +261,83 @@ grant execute on function public.marcar(uuid, bigint, text) to anon;
 grant execute on function public.incidencia(uuid, bigint, text) to anon;
 grant execute on function public.reset_pin(uuid, int) to anon;
 notify pgrst, 'reload schema';
+
+-- ===== Ampliación 2026-10-11: tiempo extra por piso y sincronización con Amenitiz =====
+alter table public.pisos add column if not exists extra_min int not null default 0;
+alter table public.tareas add column if not exists origen text not null default 'manual';
+alter table public.tareas add column if not exists baja boolean not null default false;
+
+create or replace function public.datos(p_token uuid, p_desde date, p_hasta date) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare yo personas;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  return json_build_object(
+    'yo', json_build_object('id', yo.id, 'nombre', yo.nombre, 'rol', yo.rol),
+    'hoy', (now() at time zone 'Europe/Madrid')::date,
+    'personas', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'rol', rol,
+        'tiene_pin', pin_hash is not null) order by id), '[]'::json) from personas where activo),
+    'pisos', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'sale', sale, 'entra', entra,
+        'min', min_prev, 'max', max_prev, 'otra_zona', otra_zona, 'extra', extra_min) order by nombre), '[]'::json) from pisos where activo),
+    'vacaciones', (select coalesce(json_agg(json_build_object('persona_id', persona_id, 'desde', desde, 'hasta', hasta)), '[]'::json)
+        from vacaciones where hasta >= p_desde and desde <= p_hasta),
+    'tareas', (select coalesce(json_agg(json_build_object('id', t.id, 'fecha', t.fecha, 'piso_id', t.piso_id, 'pax', t.pax,
+        'limpiadora_id', t.limpiadora_id, 'entro', t.entro, 'salgo', t.salgo, 'nueva', t.nueva,
+        'prox_fecha', t.prox_fecha, 'prox_pax', t.prox_pax, 'baja', t.baja,
+        'inc', (select coalesce(json_agg(json_build_object('texto', i.texto, 'creado', i.creado,
+            'quien', (select nombre from personas where id = i.persona_id)) order by i.creado), '[]'::json)
+          from incidencias i where i.tarea_id = t.id)) order by t.fecha, t.id), '[]'::json)
+      from tareas t join pisos z on z.id = t.piso_id
+      where t.fecha between p_desde and p_hasta
+        and (yo.rol = 'admin'
+          or (yo.rol = 'encargada' and (not z.otra_zona or t.limpiadora_id = yo.id))
+          or t.limpiadora_id = yo.id))
+  );
+end $$;
+
+-- Filas: [fecha, nombre en Amenitiz, personas que entran ese día (0 = nadie, null = sin dato), próxima entrada, personas de la próxima entrada]
+create or replace function public.sincronizar(p_token uuid, p_desde date, p_hasta date, p_filas jsonb) returns json
+language plpgsql security definer set search_path = public as $$
+declare yo personas; r jsonb; z int; t tareas; idn bigint; v_pax int; f date;
+  hoy date := (now() at time zone 'Europe/Madrid')::date;
+  n_new int := 0; n_upd int := 0; n_del int := 0; n_baja int := 0; n_ign int := 0; vistos bigint[] := '{}';
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  if yo.rol <> 'admin' then return json_build_object('error', 'No tienes permiso'); end if;
+  if p_desde is null or p_hasta is null or p_hasta < p_desde or p_hasta - p_desde > 40
+     or jsonb_typeof(p_filas) <> 'array' or jsonb_array_length(p_filas) = 0 then
+    return json_build_object('error', 'Datos de Amenitiz vacíos o no válidos'); end if;
+  for r in select * from jsonb_array_elements(p_filas) loop
+    f := (r->>0)::date;
+    if f < p_desde or f > p_hasta then continue; end if;
+    select id into z from pisos where activo and lower(btrim(amenitiz)) = lower(btrim(r->>1));
+    if z is null then n_ign := n_ign + 1; continue; end if;
+    v_pax := (r->>2)::int;
+    select * into t from tareas where fecha = f and piso_id = z;
+    if found then
+      vistos := vistos || t.id;
+      if t.origen = 'amenitiz' and t.entro is null and (t.pax is distinct from v_pax
+          or t.prox_fecha is distinct from (r->>3)::date or t.prox_pax is distinct from (r->>4)::int or t.baja) then
+        update tareas set pax = v_pax, prox_fecha = (r->>3)::date, prox_pax = (r->>4)::int, baja = false where id = t.id;
+        n_upd := n_upd + 1;
+      elsif t.baja then
+        update tareas set baja = false where id = t.id;
+      end if;
+    else
+      insert into tareas(fecha, piso_id, pax, prox_fecha, prox_pax, origen, nueva)
+        values (f, z, v_pax, (r->>3)::date, (r->>4)::int, 'amenitiz', f - hoy <= 8) returning id into idn;
+      vistos := vistos || idn; n_new := n_new + 1;
+    end if;
+  end loop;
+  delete from tareas where origen = 'amenitiz' and fecha between greatest(p_desde, hoy) and p_hasta
+    and entro is null and limpiadora_id is null and not (id = any(vistos));
+  get diagnostics n_del = row_count;
+  update tareas set baja = true where origen = 'amenitiz' and fecha between greatest(p_desde, hoy) and p_hasta
+    and entro is null and limpiadora_id is not null and not baja and not (id = any(vistos));
+  get diagnostics n_baja = row_count;
+  return json_build_object('ok', true, 'nuevas', n_new, 'actualizadas', n_upd, 'quitadas', n_del, 'bajas', n_baja, 'ignoradas', n_ign);
+end $$;
+grant execute on function public.sincronizar(uuid, date, date, jsonb) to anon;
+notify pgrst, 'reload schema';

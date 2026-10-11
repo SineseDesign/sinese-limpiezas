@@ -89,6 +89,7 @@ td.n{text-align:center;padding-right:4px}
 .login{display:flex;flex-direction:column;gap:12px}
 .names{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .names .btn{flex:none}
+.aviso{font-size:14px;color:var(--muted);border-left:3px solid var(--gold-soft);padding-left:10px;margin:12px 0 0}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:12px 14px;border-radius:6px;text-align:center;z-index:5}
 </style>
 </head>
@@ -130,6 +131,7 @@ const fm=m=>{m=Math.round(m);return m<60?m+" min":Math.floor(m/60)+" h"+(m%60?" 
 const durm=ms=>{const m=Math.max(0,Math.round(ms/60000));return m<1?"menos de 1 min":fm(m)};
 
 let ses=null, D=null, sem=0, dia=null, vista=null, paso={n:null}, cargando=false, armado=null;
+let H=null, mes=null, hq="", pendSync=null, syncMsg="";
 try{ ses=JSON.parse(store.get("sinese-sesion")||"null"); }catch(e){ ses=null; }
 
 const piso=id=>D.pisos.find(p=>p.id===id)||{nombre:"Piso",otra_zona:false};
@@ -171,6 +173,16 @@ async function cargar(silencio){
     const r=await rpc("datos",{p_token:ses.token,p_desde:l,p_hasta:add(l,6)});
     if(r.error){ ses=null; D=null; store.del("sinese-sesion"); pintarLogin(); return; }
     D=r;
+    if(pendSync){
+      const ps=pendSync; pendSync=null;
+      if(D.yo.rol!=="admin") syncMsg="Sincronización con Amenitiz no aplicada: hay que entrar como administración.";
+      else{
+        try{ const x=await rpc("sincronizar",{p_token:ses.token,p_desde:ps.d,p_hasta:ps.h,p_filas:ps.f});
+          syncMsg=x.error?"Sincronización con Amenitiz fallida: "+x.error:"Sincronización con Amenitiz hecha ("+ps.d+" a "+ps.h+"): "+x.nuevas+" nuevas, "+x.actualizadas+" actualizadas, "+x.quitadas+" quitadas, "+x.bajas+" marcadas como baja, "+x.ignoradas+" de pisos que no llevamos.";
+          if(!x.error){ const r2=await rpc("datos",{p_token:ses.token,p_desde:l,p_hasta:add(l,6)}); if(!r2.error) D=r2; }
+        }catch(e){ syncMsg="Sincronización con Amenitiz fallida: sin conexión."; }
+      }
+    }
     if(!vista) vista=D.yo.rol==="limpiadora"?"mios":"plan";
     if(!dia||dia<l||dia>add(l,6)) dia=(D.hoy>=l&&D.hoy<=add(l,6))?D.hoy:l;
     const a=document.activeElement;
@@ -189,11 +201,12 @@ async function hacer(f,b){
 async function pintarLogin(){
   $("b-salir").hidden=true; $("t-tit").textContent="Sinese Limpiezas"; $("t-sub").textContent="Sinese Premium Apartments";
   const app=$("app");
+  const sm=syncMsg?`<p class="aviso" id="syncmsg">${esc(syncMsg)}</p>`:"";
   if(!paso.n){
     app.innerHTML='<h1>¿Quién eres?</h1><p class="sum">Cargando…</p>';
     let l; try{ l=await rpc("lista_personas"); }catch(e){ app.innerHTML='<h1>¿Quién eres?</h1><p class="empty">Sin conexión. Comprueba internet y vuelve a abrir la app.</p>'; return; }
     paso.lista=l;
-    app.innerHTML=`<h1>¿Quién eres?</h1><div class="names">${l.map(p=>`<button type="button" class="btn sec" data-n="${esc(p.nombre)}">${esc(p.nombre)}</button>`).join("")}</div>`;
+    app.innerHTML=`${sm}<h1>¿Quién eres?</h1><div class="names">${l.map(p=>`<button type="button" class="btn sec" data-n="${esc(p.nombre)}">${esc(p.nombre)}</button>`).join("")}</div>`;
     return;
   }
   const p=paso.lista.find(x=>x.nombre===paso.n), nuevo=!p.tiene_pin;
@@ -212,12 +225,13 @@ async function pintarLogin(){
 function pintar(){
   $("b-salir").hidden=false;
   const l=lunes(), dias=[0,1,2,3,4,5,6].map(i=>add(l,i));
-  const rol=D.yo.rol, tabs=rol==="admin"?[["plan","Planning"],["equipo","Equipo"]]:rol==="encargada"?[["plan","Planning"],["mios","Mis pisos"]]:[];
-  $("t-tit").textContent=vista==="mios"?"Hola, "+D.yo.nombre:vista==="equipo"?"Equipo":"Planning de limpiezas";
-  $("t-sub").textContent=D.yo.nombre+" · "+(vista==="equipo"?"administración":largo(dia)+(dia===D.hoy?" · hoy":""));
-  let h="";
+  const rol=D.yo.rol, tabs=rol==="admin"?[["plan","Planning"],["horas","Horas"],["equipo","Equipo"]]:rol==="encargada"?[["plan","Planning"],["mios","Mis pisos"]]:[];
+  $("t-tit").textContent=vista==="mios"?"Hola, "+D.yo.nombre:vista==="equipo"?"Equipo":vista==="horas"?"Horas trabajadas":"Planning de limpiezas";
+  $("t-sub").textContent=D.yo.nombre+" · "+(vista==="equipo"||vista==="horas"?"administración":largo(dia)+(dia===D.hoy?" · hoy":""));
+  let h=syncMsg?`<p class="aviso" id="syncmsg">${esc(syncMsg)}</p>`:"";
   if(tabs.length) h+=`<div class="tabs">${tabs.map(([k,n])=>`<button type="button" class="chip" data-vista="${k}" aria-pressed="${k===vista}">${n}</button>`).join("")}</div>`;
   if(vista==="equipo"){ $("app").innerHTML=h+pintarEquipo(); return; }
+  if(vista==="horas"){ $("app").innerHTML=h+pintarHoras(); return; }
   const mia=t=>vista==="mios"?t.limpiadora_id===D.yo.id:(rol==="admin"||!piso(t.piso_id).otra_zona);
   const cuenta=f=>D.tareas.filter(t=>t.fecha===f&&mia(t)).length;
   const f0=pd(dias[0]), f6=pd(dias[6]);
@@ -244,7 +258,7 @@ function pintarPlan(delDia,dias){
     const ctl=gestiona(t)?`<div class="acts"><label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label><select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
     return `<article class="piso ${e}">
       <div class="row"><div>${z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}
-      ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}</div>
+      ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}${t.baja?'<div class="urg">Esta salida ya no figura en Amenitiz. Quítala si se ha cancelado.</div>':""}</div>
       <span class="pill">${!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
       ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
   }).join("");
@@ -285,6 +299,34 @@ function pintarMios(delDia,dias){
   return h;
 }
 
+async function cargarHoras(){
+  if(!mes) mes=D.hoy.slice(0,7);
+  const d1=mes+"-01", p=pd(d1); p.setUTCMonth(p.getUTCMonth()+1); p.setUTCDate(0);
+  try{ const r=await rpc("datos",{p_token:ses.token,p_desde:d1,p_hasta:fd(p)}); if(r.error){ toast("No se han podido cargar las horas."); return; } H={mes,pisos:r.pisos,tareas:r.tareas}; }
+  catch(e){ toast("Sin conexión. Vuelve a intentarlo."); return; }
+  if(vista==="horas") pintar();
+}
+function pintarHoras(){
+  if(!mes) mes=D.hoy.slice(0,7);
+  const nom=pd(mes+"-01").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"});
+  let h=`<div class="weeknav" style="padding-top:12px"><button type="button" class="wk" data-mes="-1" aria-label="Mes anterior">‹</button><span>${esc(nom.charAt(0).toUpperCase()+nom.slice(1))}</span><button type="button" class="wk" data-mes="1" aria-label="Mes siguiente" ${mes>=D.hoy.slice(0,7)?"disabled":""}>›</button></div>`;
+  if(!H||H.mes!==mes){ cargarHoras(); return h+'<p class="sum">Cargando…</p>'; }
+  const pz=id=>H.pisos.find(p=>p.id===id)||{nombre:"Piso",extra:0};
+  const fin=H.tareas.filter(t=>t.entro&&t.salgo&&t.limpiadora_id), abiertas=H.tareas.filter(t=>t.entro&&!t.salgo&&t.limpiadora_id);
+  const min=t=>Math.max(0,Math.round((new Date(t.salgo)-new Date(t.entro))/60000));
+  const fila=p=>{const f=fin.filter(t=>t.limpiadora_id===p.id), a=f.reduce((s,t)=>s+min(t),0), x=f.reduce((s,t)=>s+(pz(t.piso_id).extra||0),0); return {p,n:f.length,a,x};};
+  const filas=equipo().map(fila);
+  h+=`<p class="sum">Tiempo dentro de cada piso, de "Entro" a "Salgo", más el tiempo extra fijado para ese piso.</p>`;
+  h+=`<div class="tw"><table><thead><tr><th scope="col">Trabajadora</th><th scope="col">Pisos</th><th scope="col">En pisos</th><th scope="col">Extra</th><th scope="col">Total</th></tr></thead><tbody>${filas.map(r=>`<tr><th scope="row">${esc(r.p.nombre)}</th><td>${r.n}</td><td>${r.n?fm(r.a):"—"}</td><td>${r.x?"+"+fm(r.x):"—"}</td><td><strong>${r.n?fm(r.a+r.x):"—"}</strong></td></tr>`).join("")}</tbody></table></div>`;
+  if(abiertas.length) h+=`<p class="urg">${abiertas.length} ${abiertas.length===1?"limpieza tiene":"limpiezas tienen"} entrada marcada pero no salida, y no ${abiertas.length===1?"cuenta":"cuentan"} en el total.</p>`;
+  h+=`<h2>Detalle</h2><label class="paxl" style="font-size:14px">Trabajadora <select id="h-quien"><option value="">Elige</option>${equipo().map(p=>`<option value="${p.id}"${String(p.id)===hq?" selected":""}>${esc(p.nombre)}</option>`).join("")}</select></label>`;
+  if(hq){
+    const l=H.tareas.filter(t=>String(t.limpiadora_id)===hq&&t.entro).sort((a,b)=>a.fecha.localeCompare(b.fecha)||new Date(a.entro)-new Date(b.entro));
+    h+=l.length?`<div class="tw"><table><thead><tr><th scope="col">Día</th><th scope="col">Piso</th><th scope="col">Entra</th><th scope="col">Sale</th><th scope="col">Tiempo</th><th scope="col">Extra</th></tr></thead><tbody>${l.map(t=>`<tr><th scope="row" style="white-space:nowrap">${corta(t.fecha)}</th><td>${esc(pz(t.piso_id).nombre)}</td><td>${hm(t.entro)}</td><td>${t.salgo?hm(t.salgo):'<span class="urg">sin marcar</span>'}</td><td>${t.salgo?fm(min(t)):"—"}</td><td>${t.salgo&&pz(t.piso_id).extra?"+"+fm(pz(t.piso_id).extra):"—"}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">No tiene limpiezas marcadas este mes.</div>';
+  }
+  return h;
+}
+
 function pintarEquipo(){
   return `<p class="sum">Si alguien olvida su PIN, restablécelo aquí: la próxima vez que entre elegirá uno nuevo.</p>`+
     D.personas.map(p=>`<article class="piso"><div class="row"><div><div class="name">${esc(p.nombre)}</div><div class="meta">${p.rol==="admin"?"Administración":p.rol==="encargada"?"Encargada":"Limpiadora"} · ${p.tiene_pin?"con PIN":"aún no ha entrado"}</div></div></div>
@@ -296,7 +338,8 @@ $("app").addEventListener("click",async e=>{
   const n=e.target.closest("[data-n]"); if(n){ paso.n=n.dataset.n; pintarLogin(); return; }
   if(e.target.id==="b-otro"){ paso.n=null; pintarLogin(); return; }
   if(!D) return;
-  const v=e.target.closest("[data-vista]"); if(v){ vista=v.dataset.vista; armado=null; pintar(); return; }
+  const v=e.target.closest("[data-vista]"); if(v){ vista=v.dataset.vista; armado=null; if(vista==="horas") H=null; pintar(); return; }
+  const m=e.target.closest("[data-mes]"); if(m){ if(m.disabled) return; const p=pd(mes+"-01"); p.setUTCMonth(p.getUTCMonth()+(+m.dataset.mes)); mes=fd(p).slice(0,7); pintar(); return; }
   const d=e.target.closest("[data-dia]"); if(d){ dia=d.dataset.dia; armado=null; pintar(); return; }
   if(e.target.id==="wk-prev"||e.target.id==="wk-next"){ sem+=e.target.id==="wk-next"?1:-1; dia=null; armado=null; await cargar(false); return; }
   const b=e.target.closest("[data-a]"); if(!b) return;
@@ -309,6 +352,7 @@ $("app").addEventListener("click",async e=>{
 });
 $("app").addEventListener("change",async e=>{
   if(!D) return;
+  if(e.target.id==="h-quien"){ hq=e.target.value; pintar(); return; }
   const x=e.target.closest("[data-pax]");
   if(x){ const v=x.value.trim(); await hacer("editar_tarea",{p_tarea:+x.dataset.pax,p_cambios:{pax:v===""?null:Math.max(0,Math.round(+v)||0)}}); return; }
   const s=e.target.closest("[data-asig]");
@@ -344,6 +388,14 @@ $("b-salir").addEventListener("click",async()=>{
 setInterval(()=>{ if(ses&&D&&!document.hidden) cargar(true); },30000);
 document.addEventListener("visibilitychange",()=>{ if(ses&&D&&!document.hidden) cargar(true); });
 
+function leeHash(){
+  if(location.hash.indexOf("#sync=")!==0) return false;
+  try{ pendSync=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(6))))); syncMsg="Sincronización con Amenitiz pendiente: entra como administración."; }
+  catch(e){ pendSync=null; syncMsg="Sincronización con Amenitiz: los datos recibidos no son válidos."; }
+  history.replaceState(null,"",location.pathname); return true;
+}
+window.addEventListener("hashchange",()=>{ if(leeHash()){ if(ses&&ses.token) cargar(false); else pintarLogin(); } });
+leeHash();
 if(ses&&ses.token) cargar(false); else pintarLogin();
 })();
 </script>
