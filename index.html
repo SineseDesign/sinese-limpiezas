@@ -16,14 +16,14 @@
   --bg:#EDEEE6; --surface:#F8F8F3; --fg:#1F3628; --muted:#5E6F63; --line:#CBD5CB;
   --brand:#1F3628; --on-brand:#EDEEE6; --gold:#8A6A2C; --gold-soft:#C8A96E;
   --pend:#9A4B1E; --pend-bg:#F3DCCB; --work:#7A5A12; --work-bg:#F1E3BF; --done:#1F5B38; --done-bg:#CFE3D2;
-  --plan:#4A5D50; --plan-bg:#DCE4DC;
+  --plan:#4A5D50; --plan-bg:#DCE4DC; --bad:#A12A1E; --bad-bg:#F6D5D0;
   --title:Georgia,"Times New Roman",serif; --body:Arial,Helvetica,sans-serif;
 }
 @media (prefers-color-scheme: dark){ :root{
   --bg:#101C15; --surface:#1F3628; --fg:#EDEEE6; --muted:#A9BBAB; --line:#35503F;
   --brand:#C8A96E; --on-brand:#14231A; --gold:#C8A96E; --gold-soft:#C8A96E;
   --pend:#F0B58E; --pend-bg:#4A2A17; --work:#EBCF8A; --work-bg:#463A16; --done:#A8DDB5; --done-bg:#1F4A2E;
-  --plan:#C5D3C7; --plan-bg:#2C4636; color-scheme:dark } }
+  --plan:#C5D3C7; --plan-bg:#2C4636; --bad:#FF9D8F; --bad-bg:#4A1D18; color-scheme:dark } }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
@@ -52,6 +52,14 @@ select,input,textarea{background:var(--surface);border:1px solid var(--line);bor
 .day[aria-pressed="true"]{border-bottom-color:var(--gold-soft)}
 .day[aria-pressed="true"] b{font-weight:bold}
 .day.hoy b{color:var(--gold)}
+.day.ok{background:var(--done-bg)} .day.ok i{color:var(--done);font-weight:bold}
+.day.mal{background:var(--bad-bg)} .day.mal i{color:var(--bad);font-weight:bold}
+.day.curso{background:var(--work-bg)} .day.curso i{color:var(--work);font-weight:bold}
+.estado{border-radius:6px;padding:12px 14px;font-weight:bold;border-left:6px solid}
+.estado span{font-weight:normal;display:block;font-size:14px;margin-top:2px}
+.estado.ok{background:var(--done-bg);color:var(--done);border-color:var(--done)}
+.estado.mal{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.estado.curso{background:var(--work-bg);color:var(--work);border-color:var(--work)}
 .sum{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
 .piso{border:1px solid var(--line);border-left:6px solid var(--plan);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
 .piso.pend,.piso.pasado{border-left-color:var(--pend)} .piso.dentro{border-left-color:var(--work)} .piso.hecho{border-left-color:var(--done)}
@@ -162,6 +170,30 @@ const incs=t=>t.inc.length?`<div class="inc">${t.inc.map(i=>`<div><strong>Incide
 const clave=t=>t.pax===0?"99":(piso(t.piso_id).entra||"98");
 const orden=(a,b)=>ORD[est(a)]-ORD[est(b)]||clave(a).localeCompare(clave(b))||piso(a.piso_id).nombre.localeCompare(piso(b.piso_id).nombre,"es");
 const info=t=>`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
+const INICIO="2026-10-12"; // primer día de uso real de la app: los días anteriores no se evalúan
+let miaFn=()=>true;
+function estDia(f){
+  const l=D.tareas.filter(t=>t.fecha===f&&miaFn(t)), falta=l.filter(t=>!t.salgo), r={k:"",n:l.length,hechos:l.length-falta.length,falta,sin:[],plazo:false};
+  // Asignación: se vigila desde hoy hasta dentro de 7 días, y solo en la vista de planning
+  r.plazo=vista!=="mios"&&f>=D.hoy&&f<=add(D.hoy,7)&&l.length>0;
+  if(r.plazo) r.sin=l.filter(t=>!t.limpiadora_id&&!t.salgo);
+  if(!l.length||f<INICIO||f>D.hoy) return r;
+  if(!falta.length) r.k="ok";
+  else if(f<D.hoy) r.k="mal";
+  else { const ahora=hm(Date.now()); r.k=falta.some(t=>t.pax!==0&&piso(t.piso_id).entra&&piso(t.piso_id).entra<=ahora)?"mal":"curso"; }
+  return r;
+}
+function avisoDia(f){
+  const e=estDia(f);
+  let a="";
+  if(e.sin.length) a=`<div class="estado mal">Sin asignar: ${e.sin.length===1?"1 piso":e.sin.length+" pisos"}. <span>${e.sin.map(t=>esc(piso(t.piso_id).nombre)).join(", ")}.</span></div>`;
+  else if(e.plazo&&!e.k) a=`<div class="estado ok">Todos los pisos de este día están asignados.</div>`;
+  if(!e.k) return a;
+  const nom=e.falta.map(t=>esc(piso(t.piso_id).nombre)).join(", "), n=e.falta.length;
+  if(e.k==="ok") return a+`<div class="estado ok">Todo hecho: ${e.n===1?"el piso de este día está terminado":"los "+e.n+" pisos de este día están terminados"}.</div>`;
+  if(e.k==="curso") return a+`<div class="estado curso">En curso: ${n===1?"falta 1 piso":"faltan "+n+" pisos"} de ${e.n}. <span>${nom}.</span></div>`;
+  return a+`<div class="estado mal">${f<D.hoy?"Sin terminar":"Fuera de hora"}: ${n===1?"falta 1 piso":"faltan "+n+" pisos"}. <span>${nom}.</span></div>`;
+}
 const lunes=()=>add(add(D?D.hoy:fd(new Date()),-dow(D?D.hoy:fd(new Date()))),7*sem);
 
 async function cargar(silencio){
@@ -169,9 +201,11 @@ async function cargar(silencio){
   cargando=true;
   try{
     const hoy0=D?D.hoy:new Intl.DateTimeFormat("en-CA",{timeZone:TZ}).format(new Date());
-    const l=add(add(hoy0,-dow(hoy0)),7*sem);
-    const r=await rpc("datos",{p_token:ses.token,p_desde:l,p_hasta:add(l,6)});
+    let l=add(add(hoy0,-dow(hoy0)),7*sem);
+    let r=await rpc("datos",{p_token:ses.token,p_desde:l,p_hasta:add(l,6)});
     if(r.error){ ses=null; D=null; store.del("sinese-sesion"); pintarLogin(); return; }
+    const l2=add(add(r.hoy,-dow(r.hoy)),7*sem); // si la fecha del móvil no coincide con la del servidor, manda la del servidor
+    if(l2!==l){ const r2=await rpc("datos",{p_token:ses.token,p_desde:l2,p_hasta:add(l2,6)}); if(!r2.error){ r=r2; l=l2; } }
     D=r;
     if(pendSync){
       const ps=pendSync; pendSync=null;
@@ -233,10 +267,11 @@ function pintar(){
   if(vista==="equipo"){ $("app").innerHTML=h+pintarEquipo(); return; }
   if(vista==="horas"){ $("app").innerHTML=h+pintarHoras(); return; }
   const mia=t=>vista==="mios"?t.limpiadora_id===D.yo.id:(rol==="admin"||!piso(t.piso_id).otra_zona);
+  miaFn=mia;
   const cuenta=f=>D.tareas.filter(t=>t.fecha===f&&mia(t)).length;
   const f0=pd(dias[0]), f6=pd(dias[6]);
   h+=`<div class="weeknav" style="padding-top:${tabs.length?0:12}px"><button type="button" class="wk" id="wk-prev" aria-label="Semana anterior" ${sem<=-4?"disabled":""}>‹</button><span>${sem===0?"Esta semana":sem===1?"Semana próxima":sem===-1?"Semana pasada":sem>0?"Dentro de "+sem+" semanas":"Hace "+(-sem)+" semanas"} · ${f0.getUTCDate()}${f0.getUTCMonth()!==f6.getUTCMonth()?" "+f0.toLocaleDateString("es-ES",{month:"short",timeZone:"UTC"}):""} al ${f6.getUTCDate()} ${f6.toLocaleDateString("es-ES",{month:"short",timeZone:"UTC"})}</span><button type="button" class="wk" id="wk-next" aria-label="Semana siguiente" ${sem>=8?"disabled":""}>›</button></div>`;
-  h+=`<div class="days">${dias.map((f,i)=>`<button type="button" class="day${f===D.hoy?" hoy":""}" data-dia="${f}" aria-pressed="${f===dia}" aria-label="${largo(f)}, ${cuenta(f)} pisos"><small>${DIAS[i]}</small><b>${pd(f).getUTCDate()}</b><i>${cuenta(f)||"·"}</i></button>`).join("")}</div>`;
+  h+=`<div class="days">${dias.map((f,i)=>{const e=estDia(f), ns=e.sin.length, kk=ns?"mal":e.k||(e.plazo?"ok":"");return `<button type="button" class="day${f===D.hoy?" hoy":""}${kk?" "+kk:""}" data-dia="${f}" aria-pressed="${f===dia}" aria-label="${largo(f)}, ${ns?ns+" sin asignar, ":""}${e.k?e.hechos+" de "+e.n+" pisos hechos"+(e.k==="ok"?", todo terminado":e.k==="mal"?", falta por hacer":", en curso"):cuenta(f)+" pisos"}"><small>${DIAS[i]}</small><b>${pd(f).getUTCDate()}</b><i>${ns?ns+" sin":e.k?e.hechos+"/"+e.n:cuenta(f)||"·"}</i></button>`}).join("")}</div>`;
   const delDia=D.tareas.filter(t=>t.fecha===dia&&mia(t));
   h+=vista==="mios"?pintarMios(delDia,dias):pintarPlan(delDia,dias);
   $("app").innerHTML=h;
@@ -247,7 +282,7 @@ function opcionesEquipo(sel,f){
 }
 
 function pintarPlan(delDia,dias){
-  let h="";
+  let h=avisoDia(dia);
   const sin=delDia.filter(t=>!t.limpiadora_id).length;
   if(dia===D.hoy){ const k={pend:0,dentro:0,hecho:0}; delDia.forEach(t=>k[est(t)]++); h+=`<div class="sum">${k.hecho} de ${delDia.length} listos para check-in · ${k.dentro} en limpieza · ${k.pend} pendientes${sin?" · "+sin+" sin asignar":""}</div>`; }
   else h+=`<div class="sum">${delDia.length} limpiezas este día · ${sin?sin+" sin asignar":"todas asignadas"}</div>`;
@@ -280,7 +315,7 @@ function pintarPlan(delDia,dias){
 }
 
 function pintarMios(delDia,dias){
-  let h="";
+  let h=avisoDia(dia);
   const mios=[...delDia].sort(orden);
   if(!mios.length) h+=`<div class="empty">${devac(D.yo.id,dia)?"Estás de vacaciones este día.":"No tienes pisos asignados este día."}</div>`;
   else h+=`<div class="sum">${mios.length} ${mios.length===1?"piso":"pisos"}${dia===D.hoy?" · "+mios.filter(t=>t.salgo).length+" terminados":""}</div>`;
