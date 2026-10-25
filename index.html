@@ -349,15 +349,19 @@ function pintarHoras(){
   const pz=id=>H.pisos.find(p=>p.id===id)||{nombre:"Piso",extra:0};
   const fin=H.tareas.filter(t=>t.entro&&t.salgo&&t.limpiadora_id), abiertas=H.tareas.filter(t=>t.entro&&!t.salgo&&t.limpiadora_id);
   const min=t=>Math.max(0,Math.round((new Date(t.salgo)-new Date(t.entro))/60000));
-  const fila=p=>{const f=fin.filter(t=>t.limpiadora_id===p.id), a=f.reduce((s,t)=>s+min(t),0), x=f.reduce((s,t)=>s+(pz(t.piso_id).extra||0),0); return {p,n:f.length,a,x};};
+  // El extra es por desplazamiento: cuenta una vez por trabajadora, día y zona (se aplica al primer piso de la zona ese día)
+  const extraDe={}, vistoZ={};
+  [...fin].sort((a,b)=>new Date(a.entro)-new Date(b.entro)).forEach(t=>{ const z=pz(t.piso_id), k=t.limpiadora_id+"|"+t.fecha+"|"+(z.zona||"p"+t.piso_id);
+    if(vistoZ[k]){ extraDe[t.id]=-1; } else { vistoZ[k]=1; extraDe[t.id]=z.extra||0; } });
+  const fila=p=>{const f=fin.filter(t=>t.limpiadora_id===p.id), a=f.reduce((s,t)=>s+min(t),0), x=f.reduce((s,t)=>s+Math.max(0,extraDe[t.id]||0),0); return {p,n:f.length,a,x};};
   const filas=equipo().map(fila);
-  h+=`<p class="sum">Tiempo dentro de cada piso, de "Entro" a "Salgo", más el tiempo extra fijado para ese piso.</p>`;
+  h+=`<p class="sum">Tiempo dentro de cada piso, de "Entro" a "Salgo", más el extra de desplazamiento, que cuenta una sola vez por zona y día.</p>`;
   h+=`<div class="tw"><table><thead><tr><th scope="col">Trabajadora</th><th scope="col">Pisos</th><th scope="col">En pisos</th><th scope="col">Extra</th><th scope="col">Total</th></tr></thead><tbody>${filas.map(r=>`<tr><th scope="row">${esc(r.p.nombre)}</th><td>${r.n}</td><td>${r.n?fm(r.a):"—"}</td><td>${r.x?"+"+fm(r.x):"—"}</td><td><strong>${r.n?fm(r.a+r.x):"—"}</strong></td></tr>`).join("")}</tbody></table></div>`;
   if(abiertas.length) h+=`<p class="urg">${abiertas.length} ${abiertas.length===1?"limpieza tiene":"limpiezas tienen"} entrada marcada pero no salida, y no ${abiertas.length===1?"cuenta":"cuentan"} en el total.</p>`;
   h+=`<h2>Detalle</h2><label class="paxl" style="font-size:14px">Trabajadora <select id="h-quien"><option value="">Elige</option>${equipo().map(p=>`<option value="${p.id}"${String(p.id)===hq?" selected":""}>${esc(p.nombre)}</option>`).join("")}</select></label>`;
   if(hq){
     const l=H.tareas.filter(t=>String(t.limpiadora_id)===hq&&t.entro).sort((a,b)=>a.fecha.localeCompare(b.fecha)||new Date(a.entro)-new Date(b.entro));
-    h+=l.length?`<div class="tw"><table><thead><tr><th scope="col">Día</th><th scope="col">Piso</th><th scope="col">Entra</th><th scope="col">Sale</th><th scope="col">Tiempo</th><th scope="col">Extra</th></tr></thead><tbody>${l.map(t=>`<tr><th scope="row" style="white-space:nowrap">${corta(t.fecha)}</th><td>${esc(pz(t.piso_id).nombre)}</td><td>${hm(t.entro)}</td><td>${t.salgo?hm(t.salgo):'<span class="urg">sin marcar</span>'}</td><td>${t.salgo?fm(min(t)):"—"}</td><td>${t.salgo&&pz(t.piso_id).extra?"+"+fm(pz(t.piso_id).extra):"—"}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">No tiene limpiezas marcadas este mes.</div>';
+    h+=l.length?`<div class="tw"><table><thead><tr><th scope="col">Día</th><th scope="col">Piso</th><th scope="col">Entra</th><th scope="col">Sale</th><th scope="col">Tiempo</th><th scope="col">Extra</th></tr></thead><tbody>${l.map(t=>`<tr><th scope="row" style="white-space:nowrap">${corta(t.fecha)}</th><td>${esc(pz(t.piso_id).nombre)}</td><td>${hm(t.entro)}</td><td>${t.salgo?hm(t.salgo):'<span class="urg">sin marcar</span>'}</td><td>${t.salgo?fm(min(t)):"—"}</td><td>${!t.salgo?"—":extraDe[t.id]===-1?'<span class="meta">misma zona</span>':extraDe[t.id]?"+"+fm(extraDe[t.id]):"—"}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">No tiene limpiezas marcadas este mes.</div>';
   }
   return h;
 }
