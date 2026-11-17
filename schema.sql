@@ -415,3 +415,92 @@ revoke execute on function public._avisar_tarea() from public, anon, authenticat
 grant execute on function public.mis_avisos(uuid) to anon;
 grant execute on function public.avisos_vistos(uuid) to anon;
 notify pgrst, 'reload schema';
+-- ===== Ampliación 2026-11-17: trabajos internos (almacén) =====
+alter table public.pisos add column if not exists interno boolean not null default false;
+insert into public.pisos(nombre, amenitiz, otra_zona, extra_min, interno) values ('Almacén', null, false, 0, true) on conflict (nombre) do nothing;
+update public.pisos set interno = true, extra_min = 0, zona = null where nombre = 'Almacén';
+
+create or replace function public.datos(p_token uuid, p_desde date, p_hasta date) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare yo personas;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  return json_build_object(
+    'yo', json_build_object('id', yo.id, 'nombre', yo.nombre, 'rol', yo.rol),
+    'hoy', (now() at time zone 'Europe/Madrid')::date,
+    'personas', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'rol', rol,
+        'tiene_pin', pin_hash is not null) order by id), '[]'::json) from personas where activo),
+    'pisos', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'sale', sale, 'entra', entra,
+        'min', min_prev, 'max', max_prev, 'otra_zona', otra_zona, 'extra', extra_min, 'zona', zona, 'interno', interno) order by nombre), '[]'::json) from pisos where activo),
+    'vacaciones', (select coalesce(json_agg(json_build_object('persona_id', persona_id, 'desde', desde, 'hasta', hasta)), '[]'::json)
+        from vacaciones where hasta >= p_desde and desde <= p_hasta),
+    'tareas', (select coalesce(json_agg(json_build_object('id', t.id, 'fecha', t.fecha, 'piso_id', t.piso_id, 'pax', t.pax,
+        'limpiadora_id', t.limpiadora_id, 'entro', t.entro, 'salgo', t.salgo, 'nueva', t.nueva,
+        'prox_fecha', t.prox_fecha, 'prox_pax', t.prox_pax, 'baja', t.baja,
+        'inc', (select coalesce(json_agg(json_build_object('texto', i.texto, 'creado', i.creado,
+            'quien', (select nombre from personas where id = i.persona_id)) order by i.creado), '[]'::json)
+          from incidencias i where i.tarea_id = t.id)) order by t.fecha, t.id), '[]'::json)
+      from tareas t join pisos z on z.id = t.piso_id
+      where t.fecha between p_desde and p_hasta
+        and (yo.rol = 'admin'
+          or (yo.rol = 'encargada' and (not z.otra_zona or t.limpiadora_id = yo.id))
+          or t.limpiadora_id = yo.id))
+  );
+end $$;
+
+create or replace function public.nueva_tarea(p_token uuid, p_fecha date, p_piso int, p_pax int, p_limpiadora int) returns json
+language plpgsql security definer set search_path = public as $$
+declare yo personas; n bigint; es_int boolean;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  select interno into es_int from pisos where id = p_piso and activo;
+  if not found then return json_build_object('error', 'Piso no válido'); end if;
+  if not _gestiona(yo.rol, p_piso) then return json_build_object('error', 'No tienes permiso'); end if;
+  if p_pax is not null and (p_pax < 0 or p_pax > 30) then return json_build_object('error', 'Número de personas no válido'); end if;
+  if p_limpiadora is not null and not exists (select 1 from personas where id = p_limpiadora and activo and rol in ('limpiadora','encargada')) then
+    return json_build_object('error', 'Persona no válida'); end if;
+  if es_int then
+    if exists (select 1 from tareas where fecha = p_fecha and piso_id = p_piso and limpiadora_id is not distinct from p_limpiadora and salgo is null) then
+      return json_build_object('error', 'Ya tienes un trabajo sin terminar hoy'); end if;
+  elsif exists (select 1 from tareas where fecha = p_fecha and piso_id = p_piso) then
+    return json_build_object('error', 'Ese piso ya está en ese día'); end if;
+  insert into tareas(fecha, piso_id, pax, limpiadora_id, nueva) values (p_fecha, p_piso, p_pax, p_limpiadora, not es_int) returning id into n;
+  return json_build_object('ok', true, 'id', n);
+end $$;
+grant execute on function public.nueva_tarea(uuid, date, int, int, int) to anon;
+
+create or replace function public._avisar_tarea() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare n text; ii boolean; hoy date := (now() at time zone 'Europe/Madrid')::date;
+begin
+  if tg_op = 'DELETE' then select interno into ii from pisos where id = old.piso_id; else select interno into ii from pisos where id = new.piso_id; end if;
+  if coalesce(ii, false) then if tg_op = 'DELETE' then return old; end if; return new; end if;
+  if tg_op = 'DELETE' then
+    if old.limpiadora_id is not null and old.salgo is null and old.fecha >= hoy then
+      select nombre into n from pisos where id = old.piso_id;
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (old.limpiadora_id, null, 'quitado', 'Se ha quitado ' || n || ' del ' || _fecha_txt(old.fecha) || '.');
+    end if;
+    return old;
+  end if;
+  select nombre into n from pisos where id = new.piso_id;
+  if tg_op = 'INSERT' then
+    if new.limpiadora_id is not null and new.fecha >= hoy then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'nuevo', 'Nuevo piso: ' || n || ' el ' || _fecha_txt(new.fecha) || '.');
+    end if;
+    return new;
+  end if;
+  if new.limpiadora_id is distinct from old.limpiadora_id then
+    if old.limpiadora_id is not null and old.fecha >= hoy and old.salgo is null then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (old.limpiadora_id, null, 'quitado', 'Ya no tienes ' || n || ' el ' || _fecha_txt(old.fecha) || '.');
+    end if;
+    if new.limpiadora_id is not null and new.fecha >= hoy then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'nuevo', 'Nuevo piso: ' || n || ' el ' || _fecha_txt(new.fecha) || '.');
+    end if;
+  elsif new.fecha is distinct from old.fecha and new.limpiadora_id is not null and new.fecha >= hoy then
+    insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'cambio', n || ' cambia del ' || _fecha_txt(old.fecha) || ' al ' || _fecha_txt(new.fecha) || '.');
+  end if;
+  return new;
+end $$;
+notify pgrst, 'reload schema';

@@ -165,12 +165,12 @@ const prevTxt=t=>{const p=piso(t.piso_id);return !p.max?"":p.min===p.max?fm(p.mi
 const prev=t=>prevTxt(t)?"Limpieza prevista: "+prevTxt(t):"";
 function desfase(t){ const p=piso(t.piso_id); if(!t.salgo||!t.entro||!p.max) return null; const r=(new Date(t.salgo)-new Date(t.entro))/60000; return r>p.max?Math.round(r-p.max):r<p.min?-Math.round(p.min-r):0; }
 const desTxt=d=>d===null?"":d>0?"+"+fm(d)+" sobre lo previsto":d<0?fm(-d)+" menos de lo previsto":"En tiempo";
-const corto=t=>{const p=piso(t.piso_id);return (p.sale||"?")+"–"+(t.pax===0?"sin entrada":(p.entra||"?")+" · "+(t.pax==null?"?":t.pax)+" pers.")};
+const corto=t=>{const p=piso(t.piso_id);if(p.interno) return "trabajo interno"+(t.entro?" · "+hm(t.entro)+(t.salgo?"–"+hm(t.salgo):""):"");return (p.sale||"?")+"–"+(t.pax===0?"sin entrada":(p.entra||"?")+" · "+(t.pax==null?"?":t.pax)+" pers.")};
 const horas=t=>[t.entro&&"Entra "+hm(t.entro),t.salgo&&"Sale "+hm(t.salgo),t.salgo&&t.entro&&"Tarda "+durm(new Date(t.salgo)-new Date(t.entro))].filter(Boolean).join(" · ");
 const incs=t=>t.inc.length?`<div class="inc">${t.inc.map(i=>`<div><strong>Incidencia ${hm(i.creado)}${i.quien?" · "+esc(i.quien):""}:</strong> ${esc(i.texto)}</div>`).join("")}</div>`:"";
 const clave=t=>t.pax===0?"99":(piso(t.piso_id).entra||"98");
 const orden=(a,b)=>ORD[est(a)]-ORD[est(b)]||clave(a).localeCompare(clave(b))||piso(a.piso_id).nombre.localeCompare(piso(b.piso_id).nombre,"es");
-const info=t=>`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
+const info=t=>piso(t.piso_id).interno?`<div class="meta">Trabajo interno, no es un piso. Marca "Entro" al empezar y "Salgo" al terminar.</div>`:`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
 const INICIO="2026-10-12"; // primer día de uso real de la app: los días anteriores no se evalúan
 let miaFn=()=>true;
 function estDia(f){
@@ -269,7 +269,7 @@ function pintar(){
   if(tabs.length) h+=`<div class="tabs">${tabs.map(([k,n])=>`<button type="button" class="chip" data-vista="${k}" aria-pressed="${k===vista}">${n}</button>`).join("")}</div>`;
   if(vista==="equipo"){ $("app").innerHTML=h+pintarEquipo(); return; }
   if(vista==="horas"){ $("app").innerHTML=h+pintarHoras(); return; }
-  const mia=t=>vista==="mios"?t.limpiadora_id===D.yo.id:(rol==="admin"||!piso(t.piso_id).otra_zona);
+  const mia=t=>!piso(t.piso_id).interno&&(vista==="mios"?t.limpiadora_id===D.yo.id:(rol==="admin"||!piso(t.piso_id).otra_zona));
   miaFn=mia;
   const cuenta=f=>D.tareas.filter(t=>t.fecha===f&&mia(t)).length;
   const f0=pd(dias[0]), f6=pd(dias[6]);
@@ -289,6 +289,8 @@ function pintarPlan(delDia,dias){
   const sin=delDia.filter(t=>!t.limpiadora_id).length;
   if(dia===D.hoy){ const k={pend:0,dentro:0,hecho:0}; delDia.forEach(t=>k[est(t)]++); h+=`<div class="sum">${k.hecho} de ${delDia.length} listos para check-in · ${k.dentro} en limpieza · ${k.pend} pendientes${sin?" · "+sin+" sin asignar":""}</div>`; }
   else h+=`<div class="sum">${delDia.length} limpiezas este día · ${sin?sin+" sin asignar":"todas asignadas"}</div>`;
+  const intr=D.tareas.filter(t=>t.fecha===dia&&piso(t.piso_id).interno);
+  if(intr.length) h+=`<div class="sum">${intr.map(t=>esc(piso(t.piso_id).nombre)+": "+esc((pers(t.limpiadora_id)||{nombre:"?"}).nombre)+(t.entro?" "+hm(t.entro)+(t.salgo?"–"+hm(t.salgo)+" ("+durm(new Date(t.salgo)-new Date(t.entro))+")":" (en curso)"):" (sin empezar)")).join(" · ")}</div>`;
   const vac=equipo().filter(p=>devac(p.id,dia)); if(vac.length) h+=`<div class="sum">De vacaciones este día: ${vac.map(p=>esc(p.nombre)).join(", ")}</div>`;
   if(!delDia.length) h+=`<div class="empty">No hay limpiezas este día. Añade un piso con el formulario de abajo.</div>`;
   h+=[...delDia].sort((a,b)=>(a.limpiadora_id?1:0)-(b.limpiadora_id?1:0)||orden(a,b)).map(t=>{
@@ -300,7 +302,7 @@ function pintarPlan(delDia,dias){
       <span class="pill">${!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
       ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
   }).join("");
-  const pisosForm=D.pisos.filter(p=>D.yo.rol==="admin"||!p.otra_zona);
+  const pisosForm=D.pisos.filter(p=>!p.interno&&(D.yo.rol==="admin"||!p.otra_zona));
   h+=`<h2>Añadir una limpieza</h2><form class="addform" id="addform">
     <label class="full">Piso<select id="n-piso" required><option value="">Elige un piso</option>${pisosForm.map(p=>`<option value="${p.id}">${esc(p.nombre)}${p.otra_zona?" (otra zona)":""}</option>`).join("")}</select></label>
     <label>Personas que entran<input id="n-pax" type="number" min="0" max="30" step="1" value="2" inputmode="numeric" placeholder="?"></label>
@@ -319,12 +321,15 @@ function pintarPlan(delDia,dias){
 
 function pintarMios(delDia,dias){
   let h=avisoDia(dia);
-  const mios=[...delDia].sort(orden);
+  const internos=D.tareas.filter(t=>t.fecha===dia&&t.limpiadora_id===D.yo.id&&piso(t.piso_id).interno);
+  const mios=[...delDia].sort(orden).concat(internos);
+  const alm=D.pisos.find(p=>p.interno);
+  if(D.yo.rol==="encargada"&&dia===D.hoy&&alm&&!internos.some(t=>!t.salgo)) h+=`<div class="acts" style="margin-top:12px"><button type="button" class="btn sec" data-a="interno" data-id="${alm.id}">Registrar trabajo en ${esc(alm.nombre.toLowerCase())}</button></div>`;
   if(!mios.length) h+=`<div class="empty">${devac(D.yo.id,dia)?"Estás de vacaciones este día.":"No tienes pisos asignados este día."}</div>`;
-  else h+=`<div class="sum">${mios.length} ${mios.length===1?"piso":"pisos"}${dia===D.hoy?" · "+mios.filter(t=>t.salgo).length+" terminados":""}</div>`;
+  else if(delDia.length) h+=`<div class="sum">${delDia.length} ${delDia.length===1?"piso":"pisos"}${dia===D.hoy?" · "+delDia.filter(t=>t.salgo).length+" terminados":""}</div>`;
   h+=mios.map(t=>{
     const e=est(t), z=piso(t.piso_id), hoy=t.fecha===D.hoy;
-    const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
+    const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>${z.interno?`<button class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`:""}`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
     return `<article class="piso ${e}">
       <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
       ${incs(t)}${b?`<div class="acts">${b}</div>`:""}
@@ -389,6 +394,7 @@ $("app").addEventListener("click",async e=>{
   const confirma=k=>{ if(armado===k){ armado=null; return true; } armado=k; pintar(); return false; };
   if(a==="entro"||a==="salgo"){ b.disabled=true; await hacer("marcar",{p_tarea:id,p_accion:a}); }
   else if(a==="corregir"){ if(confirma("c"+id)) await hacer("marcar",{p_tarea:id,p_accion:"corregir"}); }
+  else if(a==="interno"){ b.disabled=true; await hacer("nueva_tarea",{p_fecha:D.hoy,p_piso:id,p_pax:0,p_limpiadora:D.yo.id}); }
   else if(a==="quitar"){ if(confirma("q"+id)) await hacer("quitar_tarea",{p_tarea:id}); }
   else if(a==="vistos"){ b.disabled=true; try{ await rpc("avisos_vistos",{p_token:ses.token}); AV=[]; }catch(e){ toast("Sin conexión. Vuelve a intentarlo."); } pintar(); }
   else if(a==="reset"){ if(confirma("r"+id)) await hacer("reset_pin",{p_persona:id}); }
