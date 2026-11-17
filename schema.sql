@@ -341,3 +341,77 @@ begin
 end $$;
 grant execute on function public.sincronizar(uuid, date, date, jsonb) to anon;
 notify pgrst, 'reload schema';
+-- ===== Ampliación 2026-11-17: avisos a las limpiadoras de cambios en sus pisos =====
+create table if not exists public.avisos (
+  id bigserial primary key,
+  persona_id int not null references public.personas(id) on delete cascade,
+  tarea_id bigint,
+  tipo text not null,           -- nuevo | quitado | cambio
+  texto text not null,
+  creado timestamptz not null default now(),
+  visto boolean not null default false
+);
+create index if not exists avisos_persona_idx on public.avisos(persona_id) where not visto;
+alter table public.avisos enable row level security;
+
+create or replace function public._fecha_txt(f date) returns text language sql immutable as $$
+  select (array['domingo','lunes','martes','miércoles','jueves','viernes','sábado'])[extract(dow from f)::int+1] || ' ' || extract(day from f)::int
+$$;
+
+create or replace function public._avisar_tarea() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare n text; hoy date := (now() at time zone 'Europe/Madrid')::date;
+begin
+  if tg_op = 'DELETE' then
+    if old.limpiadora_id is not null and old.salgo is null and old.fecha >= hoy then
+      select nombre into n from pisos where id = old.piso_id;
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (old.limpiadora_id, null, 'quitado', 'Se ha quitado ' || n || ' del ' || _fecha_txt(old.fecha) || '.');
+    end if;
+    return old;
+  end if;
+  select nombre into n from pisos where id = new.piso_id;
+  if tg_op = 'INSERT' then
+    if new.limpiadora_id is not null and new.fecha >= hoy then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'nuevo', 'Nuevo piso: ' || n || ' el ' || _fecha_txt(new.fecha) || '.');
+    end if;
+    return new;
+  end if;
+  if new.limpiadora_id is distinct from old.limpiadora_id then
+    if old.limpiadora_id is not null and old.fecha >= hoy and old.salgo is null then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (old.limpiadora_id, null, 'quitado', 'Ya no tienes ' || n || ' el ' || _fecha_txt(old.fecha) || '.');
+    end if;
+    if new.limpiadora_id is not null and new.fecha >= hoy then
+      insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'nuevo', 'Nuevo piso: ' || n || ' el ' || _fecha_txt(new.fecha) || '.');
+    end if;
+  elsif new.fecha is distinct from old.fecha and new.limpiadora_id is not null and new.fecha >= hoy then
+    insert into avisos(persona_id, tarea_id, tipo, texto) values (new.limpiadora_id, new.id, 'cambio', n || ' cambia del ' || _fecha_txt(old.fecha) || ' al ' || _fecha_txt(new.fecha) || '.');
+  end if;
+  return new;
+end $$;
+drop trigger if exists tareas_avisos on public.tareas;
+create trigger tareas_avisos after insert or update of limpiadora_id, fecha or delete on public.tareas
+  for each row execute function public._avisar_tarea();
+
+create or replace function public.mis_avisos(p_token uuid) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare yo personas;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  return (select coalesce(json_agg(json_build_object('id', id, 'tarea_id', tarea_id, 'tipo', tipo, 'texto', texto, 'creado', creado) order by creado), '[]'::json)
+    from avisos where persona_id = yo.id and not visto);
+end $$;
+
+create or replace function public.avisos_vistos(p_token uuid) returns json
+language plpgsql security definer set search_path = public as $$
+declare yo personas;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  update avisos set visto = true where persona_id = yo.id and not visto;
+  return json_build_object('ok', true);
+end $$;
+revoke execute on function public._avisar_tarea() from public, anon, authenticated;
+grant execute on function public.mis_avisos(uuid) to anon;
+grant execute on function public.avisos_vistos(uuid) to anon;
+notify pgrst, 'reload schema';

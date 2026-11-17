@@ -57,6 +57,7 @@ select,input,textarea{background:var(--surface);border:1px solid var(--line);bor
 .day.curso{background:var(--work-bg)} .day.curso i{color:var(--work);font-weight:bold}
 .estado{border-radius:6px;padding:12px 14px;font-weight:bold;border-left:6px solid}
 .estado span{font-weight:normal;display:block;font-size:14px;margin-top:2px}
+.estado.nuevo{background:var(--plan-bg);color:var(--fg);border-color:var(--gold-soft)}
 .estado.ok{background:var(--done-bg);color:var(--done);border-color:var(--done)}
 .estado.mal{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
 .estado.curso{background:var(--work-bg);color:var(--work);border-color:var(--work)}
@@ -139,7 +140,7 @@ const fm=m=>{m=Math.round(m);return m<60?m+" min":Math.floor(m/60)+" h"+(m%60?" 
 const durm=ms=>{const m=Math.max(0,Math.round(ms/60000));return m<1?"menos de 1 min":fm(m)};
 
 let ses=null, D=null, sem=0, dia=null, vista=null, paso={n:null}, cargando=false, armado=null;
-let H=null, mes=null, hq="", pendSync=null, syncMsg="";
+let H=null, mes=null, hq="", pendSync=null, syncMsg="", AV=[];
 try{ ses=JSON.parse(store.get("sinese-sesion")||"null"); }catch(e){ ses=null; }
 
 const piso=id=>D.pisos.find(p=>p.id===id)||{nombre:"Piso",otra_zona:false};
@@ -207,6 +208,7 @@ async function cargar(silencio){
     const l2=add(add(r.hoy,-dow(r.hoy)),7*sem); // si la fecha del móvil no coincide con la del servidor, manda la del servidor
     if(l2!==l){ const r2=await rpc("datos",{p_token:ses.token,p_desde:l2,p_hasta:add(l2,6)}); if(!r2.error){ r=r2; l=l2; } }
     D=r;
+    try{ const a=await rpc("mis_avisos",{p_token:ses.token}); AV=Array.isArray(a)?a:[]; }catch(e){}
     if(pendSync){
       const ps=pendSync; pendSync=null;
       if(D.yo.rol!=="admin") syncMsg="Sincronización con Amenitiz no aplicada: hay que entrar como administración.";
@@ -263,6 +265,7 @@ function pintar(){
   $("t-tit").textContent=vista==="mios"?"Hola, "+D.yo.nombre:vista==="equipo"?"Equipo":vista==="horas"?"Horas trabajadas":"Planning de limpiezas";
   $("t-sub").textContent=D.yo.nombre+" · "+(vista==="equipo"||vista==="horas"?"administración":largo(dia)+(dia===D.hoy?" · hoy":""));
   let h=syncMsg?`<p class="aviso" id="syncmsg">${esc(syncMsg)}</p>`:"";
+  if(AV.length) h+=`<div class="estado nuevo" id="avisos" style="margin-top:12px"><div>${AV.length===1?"Hay un cambio en tus pisos":"Hay "+AV.length+" cambios en tus pisos"}</div><span>${AV.map(a=>esc(a.texto)).join("<br>")}</span><div class="acts" style="margin-top:8px"><button type="button" class="btn slim" data-a="vistos">Entendido</button></div></div>`;
   if(tabs.length) h+=`<div class="tabs">${tabs.map(([k,n])=>`<button type="button" class="chip" data-vista="${k}" aria-pressed="${k===vista}">${n}</button>`).join("")}</div>`;
   if(vista==="equipo"){ $("app").innerHTML=h+pintarEquipo(); return; }
   if(vista==="horas"){ $("app").innerHTML=h+pintarHoras(); return; }
@@ -323,7 +326,7 @@ function pintarMios(delDia,dias){
     const e=est(t), z=piso(t.piso_id), hoy=t.fecha===D.hoy;
     const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
     return `<article class="piso ${e}">
-      <div class="row"><div>${t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
+      <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
       ${incs(t)}${b?`<div class="acts">${b}</div>`:""}
       <form class="incform" data-id="${t.id}"><input id="inc-${t.id}" maxlength="500" aria-label="Incidencia en ${esc(z.nombre)}" placeholder="Escribe una incidencia"><button class="btn sec slim" type="submit">Enviar</button></form>
     </article>`;
@@ -387,6 +390,7 @@ $("app").addEventListener("click",async e=>{
   if(a==="entro"||a==="salgo"){ b.disabled=true; await hacer("marcar",{p_tarea:id,p_accion:a}); }
   else if(a==="corregir"){ if(confirma("c"+id)) await hacer("marcar",{p_tarea:id,p_accion:"corregir"}); }
   else if(a==="quitar"){ if(confirma("q"+id)) await hacer("quitar_tarea",{p_tarea:id}); }
+  else if(a==="vistos"){ b.disabled=true; try{ await rpc("avisos_vistos",{p_token:ses.token}); AV=[]; }catch(e){ toast("Sin conexión. Vuelve a intentarlo."); } pintar(); }
   else if(a==="reset"){ if(confirma("r"+id)) await hacer("reset_pin",{p_persona:id}); }
 });
 $("app").addEventListener("change",async e=>{
