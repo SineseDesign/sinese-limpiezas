@@ -504,3 +504,71 @@ begin
   return new;
 end $$;
 notify pgrst, 'reload schema';
+-- ===== Ampliación 2026-11-22: pisos limpiados por empresas externas =====
+alter table public.pisos add column if not exists externo boolean not null default false;
+insert into public.pisos(nombre, amenitiz, otra_zona, extra_min, externo) values
+ ('Almuñécar','ALMUÑECAR',true,0,true),('Benalmádena','BENALMADENA FIRMAMENTO',true,0,true),('Roquetas','ROQUETAS',true,0,true),
+ ('Carihuela Park','CARIHUELA PARK 909',true,0,true),('La Roca A','LA ROCA -A',true,0,true),('Roca 602-B','ROCA 602-B',true,0,true),
+ ('Torremolinos Close','TORREMOLINOS',true,0,true)
+ on conflict (nombre) do update set amenitiz = excluded.amenitiz, otra_zona = true, externo = true, activo = true;
+
+create or replace function public.datos(p_token uuid, p_desde date, p_hasta date) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare yo personas;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  return json_build_object(
+    'yo', json_build_object('id', yo.id, 'nombre', yo.nombre, 'rol', yo.rol),
+    'hoy', (now() at time zone 'Europe/Madrid')::date,
+    'personas', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'rol', rol,
+        'tiene_pin', pin_hash is not null) order by id), '[]'::json) from personas where activo),
+    'pisos', (select coalesce(json_agg(json_build_object('id', id, 'nombre', nombre, 'sale', sale, 'entra', entra,
+        'min', min_prev, 'max', max_prev, 'otra_zona', otra_zona, 'extra', extra_min, 'zona', zona, 'interno', interno, 'externo', externo) order by nombre), '[]'::json) from pisos where activo),
+    'vacaciones', (select coalesce(json_agg(json_build_object('persona_id', persona_id, 'desde', desde, 'hasta', hasta)), '[]'::json)
+        from vacaciones where hasta >= p_desde and desde <= p_hasta),
+    'tareas', (select coalesce(json_agg(json_build_object('id', t.id, 'fecha', t.fecha, 'piso_id', t.piso_id, 'pax', t.pax,
+        'limpiadora_id', t.limpiadora_id, 'entro', t.entro, 'salgo', t.salgo, 'nueva', t.nueva,
+        'prox_fecha', t.prox_fecha, 'prox_pax', t.prox_pax, 'baja', t.baja,
+        'inc', (select coalesce(json_agg(json_build_object('texto', i.texto, 'creado', i.creado,
+            'quien', (select nombre from personas where id = i.persona_id)) order by i.creado), '[]'::json)
+          from incidencias i where i.tarea_id = t.id)) order by t.fecha, t.id), '[]'::json)
+      from tareas t join pisos z on z.id = t.piso_id
+      where t.fecha between p_desde and p_hasta
+        and (yo.rol = 'admin'
+          or (yo.rol = 'encargada' and (not z.otra_zona or t.limpiadora_id = yo.id))
+          or t.limpiadora_id = yo.id))
+  );
+end $$;
+
+create or replace function public.marcar(p_token uuid, p_tarea bigint, p_accion text) returns json
+language plpgsql security definer set search_path = public as $$
+declare yo personas; t tareas; jefe boolean;
+begin
+  select * into yo from _quien(p_token);
+  if yo.id is null then return json_build_object('error', 'sesion'); end if;
+  select * into t from tareas where id = p_tarea;
+  if not found then return json_build_object('error', 'Esa limpieza ya no existe'); end if;
+  jefe := yo.rol in ('admin', 'encargada');
+  if p_accion = 'hecho' then
+    if yo.rol <> 'admin' then return json_build_object('error', 'No tienes permiso'); end if;
+    update tareas set entro = coalesce(entro, now()), salgo = coalesce(salgo, now()) where id = p_tarea;
+    return json_build_object('ok', true);
+  end if;
+  if not jefe and t.limpiadora_id is distinct from yo.id then return json_build_object('error', 'Ese piso no es tuyo'); end if;
+  if not jefe and t.fecha <> (now() at time zone 'Europe/Madrid')::date then
+    return json_build_object('error', 'Solo se puede marcar el día de la limpieza'); end if;
+  if p_accion = 'entro' then
+    update tareas set entro = coalesce(entro, now()) where id = p_tarea;
+  elsif p_accion = 'salgo' then
+    if t.entro is null then return json_build_object('error', 'Primero marca la entrada'); end if;
+    update tareas set salgo = coalesce(salgo, now()) where id = p_tarea;
+  elsif p_accion = 'corregir' then
+    update tareas set entro = null, salgo = null where id = p_tarea;
+  else
+    return json_build_object('error', 'Acción no válida');
+  end if;
+  return json_build_object('ok', true);
+end $$;
+notify pgrst, 'reload schema';
+select string_agg(nombre || ' = ' || amenitiz, ', ' order by nombre) externos from public.pisos where externo;

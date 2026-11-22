@@ -170,14 +170,14 @@ const horas=t=>[t.entro&&"Entra "+hm(t.entro),t.salgo&&"Sale "+hm(t.salgo),t.sal
 const incs=t=>t.inc.length?`<div class="inc">${t.inc.map(i=>`<div><strong>Incidencia ${hm(i.creado)}${i.quien?" · "+esc(i.quien):""}:</strong> ${esc(i.texto)}</div>`).join("")}</div>`:"";
 const clave=t=>t.pax===0?"99":(piso(t.piso_id).entra||"98");
 const orden=(a,b)=>ORD[est(a)]-ORD[est(b)]||clave(a).localeCompare(clave(b))||piso(a.piso_id).nombre.localeCompare(piso(b.piso_id).nombre,"es");
-const info=t=>piso(t.piso_id).interno?`<div class="meta">Trabajo interno, no es un piso. Marca "Entro" al empezar y "Salgo" al terminar.</div>`:`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
+const info=t=>piso(t.piso_id).externo?`<div class="meta">Limpieza de empresa externa</div><div class="meta">${t.pax===0?"Ese día no entra nadie":"Entran "+(t.pax==null?"personas por confirmar":npers(t.pax))+" ese día"}</div>${t.salgo?`<div class="meta">Marcado como hecho a las ${hm(t.salgo)}</div>`:""}`:piso(t.piso_id).interno?`<div class="meta">Trabajo interno, no es un piso. Marca "Entro" al empezar y "Salgo" al terminar.</div>`:`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
 const INICIO="2026-10-12"; // primer día de uso real de la app: los días anteriores no se evalúan
 let miaFn=()=>true;
 function estDia(f){
   const l=D.tareas.filter(t=>t.fecha===f&&miaFn(t)), falta=l.filter(t=>!t.salgo), r={k:"",n:l.length,hechos:l.length-falta.length,falta,sin:[],plazo:false};
   // Asignación: se vigila desde hoy hasta dentro de 7 días, y solo en la vista de planning
   r.plazo=vista!=="mios"&&f>=D.hoy&&f<=add(D.hoy,7)&&l.length>0;
-  if(r.plazo) r.sin=l.filter(t=>!t.limpiadora_id&&!t.salgo);
+  if(r.plazo) r.sin=l.filter(t=>!t.limpiadora_id&&!t.salgo&&!piso(t.piso_id).externo);
   if(!l.length||f<INICIO||f>D.hoy) return r;
   if(!falta.length) r.k="ok";
   else if(f<D.hoy) r.k="mal";
@@ -295,11 +295,11 @@ function pintarPlan(delDia,dias){
   if(!delDia.length) h+=`<div class="empty">No hay limpiezas este día. Añade un piso con el formulario de abajo.</div>`;
   h+=[...delDia].sort((a,b)=>(a.limpiadora_id?1:0)-(b.limpiadora_id?1:0)||orden(a,b)).map(t=>{
     const e=est(t), z=piso(t.piso_id), d=desfase(t), q=pers(t.limpiadora_id);
-    const ctl=gestiona(t)?`<div class="acts"><label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label><select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
+    const ctl=z.externo?(D.yo.rol==="admin"?`<div class="acts">${t.salgo?`<button type="button" class="btn sec" data-a="corregir" data-id="${t.id}">Deshacer</button>`:`<button type="button" class="btn" data-a="hecho" data-id="${t.id}">Hecho</button><button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:""):gestiona(t)?`<div class="acts"><label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label><select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
     return `<article class="piso ${e}">
-      <div class="row"><div>${z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}
+      <div class="row"><div>${z.externo?'<div class="new">Empresa externa</div>':z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}
       ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}${t.baja?'<div class="urg">Esta salida ya no figura en Amenitiz. Quítala si se ha cancelado.</div>':""}</div>
-      <span class="pill">${!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
+      <span class="pill">${z.externo?(t.salgo?"Hecho":"Empresa externa"):!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
       ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
   }).join("");
   const pisosForm=D.pisos.filter(p=>!p.interno&&(D.yo.rol==="admin"||!p.otra_zona));
@@ -394,6 +394,7 @@ $("app").addEventListener("click",async e=>{
   const confirma=k=>{ if(armado===k){ armado=null; return true; } armado=k; pintar(); return false; };
   if(a==="entro"||a==="salgo"){ b.disabled=true; await hacer("marcar",{p_tarea:id,p_accion:a}); }
   else if(a==="corregir"){ if(confirma("c"+id)) await hacer("marcar",{p_tarea:id,p_accion:"corregir"}); }
+  else if(a==="hecho"){ b.disabled=true; await hacer("marcar",{p_tarea:id,p_accion:"hecho"}); }
   else if(a==="interno"){ b.disabled=true; await hacer("nueva_tarea",{p_fecha:D.hoy,p_piso:id,p_pax:0,p_limpiadora:D.yo.id}); }
   else if(a==="quitar"){ if(confirma("q"+id)) await hacer("quitar_tarea",{p_tarea:id}); }
   else if(a==="vistos"){ b.disabled=true; try{ await rpc("avisos_vistos",{p_token:ses.token}); AV=[]; }catch(e){ toast("Sin conexión. Vuelve a intentarlo."); } pintar(); }
