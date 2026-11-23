@@ -84,6 +84,7 @@ select,input,textarea{background:var(--surface);border:1px solid var(--line);bor
 .incform input{flex:1}
 .paxl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .paxl input{width:64px}
+.huesp{font-family:var(--body,Arial,sans-serif);font-size:13px;font-weight:bold;color:var(--brand);border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap;vertical-align:middle}
 .acts select{min-width:150px}
 .addform{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .addform label,.login label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
@@ -295,9 +296,9 @@ function pintarPlan(delDia,dias){
   if(!delDia.length) h+=`<div class="empty">No hay limpiezas este día. Añade un piso con el formulario de abajo.</div>`;
   h+=[...delDia].sort((a,b)=>(a.limpiadora_id?1:0)-(b.limpiadora_id?1:0)||orden(a,b)).map(t=>{
     const e=est(t), z=piso(t.piso_id), d=desfase(t), q=pers(t.limpiadora_id);
-    const ctl=z.externo?(D.yo.rol==="admin"?`<div class="acts">${t.salgo?`<button type="button" class="btn sec" data-a="corregir" data-id="${t.id}">Deshacer</button>`:`<button type="button" class="btn" data-a="hecho" data-id="${t.id}">Hecho</button><button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:""):gestiona(t)?`<div class="acts"><label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label><select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
+    const ctl=z.externo?(D.yo.rol==="admin"?`<div class="acts">${t.salgo?`<button type="button" class="btn sec" data-a="corregir" data-id="${t.id}">Deshacer</button>`:`<button type="button" class="btn" data-a="hecho" data-id="${t.id}">Hecho</button><button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:""):gestiona(t)?`<div class="acts">${t.origen==="amenitiz"?`<span class="paxl">${t.pax===0?"No entra nadie":t.pax==null?"Personas por confirmar":npers(t.pax)} · Amenitiz</span>`:`<label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label>`}<select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
     return `<article class="piso ${e}">
-      <div class="row"><div>${z.externo?'<div class="new">Empresa externa</div>':z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}
+      <div class="row"><div>${z.externo?'<div class="new">Empresa externa</div>':z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${t.pax===0?"sin entrada":t.pax+" pers."}</span>`}</div>${info(t)}
       ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}${t.baja?'<div class="urg">Esta salida ya no figura en Amenitiz. Quítala si se ha cancelado.</div>':""}</div>
       <span class="pill">${z.externo?(t.salgo?"Hecho":"Empresa externa"):!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
       ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
@@ -305,10 +306,10 @@ function pintarPlan(delDia,dias){
   const pisosForm=D.pisos.filter(p=>!p.interno&&(D.yo.rol==="admin"||!p.otra_zona));
   h+=`<h2>Añadir una limpieza</h2><form class="addform" id="addform">
     <label class="full">Piso<select id="n-piso" required><option value="">Elige un piso</option>${pisosForm.map(p=>`<option value="${p.id}">${esc(p.nombre)}${p.otra_zona?" (otra zona)":""}</option>`).join("")}</select></label>
-    <label>Personas que entran<input id="n-pax" type="number" min="0" max="30" step="1" value="2" inputmode="numeric" placeholder="?"></label>
+    <label>Personas que entran<input id="n-pax" type="number" min="0" max="30" step="1" value="" inputmode="numeric" placeholder="?"></label>
     <label>Limpia<select id="n-quien">${opcionesEquipo(null,dia)}</select></label>
     <button class="btn full" type="submit">Añadir al ${esc(largo(dia).split(",")[0])} ${pd(dia).getUTCDate()}</button></form>
-    <div class="sum">Deja las personas en blanco si aún no se sabe, o pon 0 si ese día no entra nadie.</div>`;
+    <div class="sum">Si la reserva está en Amenitiz, las personas se rellenan solas en la siguiente sincronización: puedes dejarlas en blanco.</div>`;
   const cont=(pid,f)=>D.tareas.filter(t=>t.limpiadora_id===pid&&(f?t.fecha===f:true)).length;
   h+=`<h2>Reparto de la semana</h2><div class="tw"><table><thead><tr><th scope="col">Pisos</th>${DIAS.map(d=>`<th scope="col">${d[0]}</th>`).join("")}<th scope="col">Tot.</th></tr></thead><tbody>${equipo().map(p=>`<tr><th scope="row">${esc(p.nombre)}</th>${dias.map(f=>`<td class="n">${cont(p.id,f)||(devac(p.id,f)?"V":"·")}</td>`).join("")}<td class="n"><strong>${cont(p.id)}</strong></td></tr>`).join("")}</tbody></table></div>`;
   const hechos=delDia.filter(t=>t.salgo&&t.entro);
@@ -331,7 +332,7 @@ function pintarMios(delDia,dias){
     const e=est(t), z=piso(t.piso_id), hoy=t.fecha===D.hoy;
     const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>${z.interno?`<button class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`:""}`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
     return `<article class="piso ${e}">
-      <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
+      <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${t.pax===0?"sin entrada":t.pax+" pers."}</span>`}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
       ${incs(t)}${b?`<div class="acts">${b}</div>`:""}
       <form class="incform" data-id="${t.id}"><input id="inc-${t.id}" maxlength="500" aria-label="Incidencia en ${esc(z.nombre)}" placeholder="Escribe una incidencia"><button class="btn sec slim" type="submit">Enviar</button></form>
     </article>`;
