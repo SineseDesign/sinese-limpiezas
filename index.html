@@ -154,6 +154,7 @@ const est=t=>t.salgo?"hecho":t.entro?"dentro":t.fecha===D.hoy?"pend":t.fecha<D.h
 const LAB={plan:"Previsto",pend:"Pendiente",dentro:"Dentro",hecho:"Listo",pasado:"Sin marcar"};
 const ORD={pend:0,pasado:0,plan:0,dentro:1,hecho:2};
 const npers=n=>n+(n===1?" persona":" personas");
+const badge=t=>t.pax===0?(t.prox_fecha?"llegan "+(t.prox_pax!=null?t.prox_pax+" pers.":"?")+" el "+corta(t.prox_fecha):"sin entrada"):t.pax+" pers.";
 const sale=t=>piso(t.piso_id).sale?"Salen a las "+piso(t.piso_id).sale:"Salida: hora por confirmar";
 function entra(t){
   const h=piso(t.piso_id).entra;
@@ -166,12 +167,12 @@ const prevTxt=t=>{const p=piso(t.piso_id);return !p.max?"":p.min===p.max?fm(p.mi
 const prev=t=>prevTxt(t)?"Limpieza prevista: "+prevTxt(t):"";
 function desfase(t){ const p=piso(t.piso_id); if(!t.salgo||!t.entro||!p.max) return null; const r=(new Date(t.salgo)-new Date(t.entro))/60000; return r>p.max?Math.round(r-p.max):r<p.min?-Math.round(p.min-r):0; }
 const desTxt=d=>d===null?"":d>0?"+"+fm(d)+" sobre lo previsto":d<0?fm(-d)+" menos de lo previsto":"En tiempo";
-const corto=t=>{const p=piso(t.piso_id);if(p.interno) return "trabajo interno"+(t.entro?" · "+hm(t.entro)+(t.salgo?"–"+hm(t.salgo):""):"");return (p.sale||"?")+"–"+(t.pax===0?"sin entrada":(p.entra||"?")+" · "+(t.pax==null?"?":t.pax)+" pers.")};
+const corto=t=>{const p=piso(t.piso_id);if(p.interno) return "trabajo interno"+(t.entro?" · "+hm(t.entro)+(t.salgo?"–"+hm(t.salgo):""):"");return (p.sale||"?")+"–"+(t.pax===0?"sin entrada"+(t.prox_fecha?" (llegan "+(t.prox_pax??"?")+" el "+corta(t.prox_fecha)+")":""):(p.entra||"?")+" · "+(t.pax==null?"?":t.pax)+" pers.")};
 const horas=t=>[t.entro&&"Entra "+hm(t.entro),t.salgo&&"Sale "+hm(t.salgo),t.salgo&&t.entro&&"Tarda "+durm(new Date(t.salgo)-new Date(t.entro))].filter(Boolean).join(" · ");
 const incs=t=>t.inc.length?`<div class="inc">${t.inc.map(i=>`<div><strong>Incidencia ${hm(i.creado)}${i.quien?" · "+esc(i.quien):""}:</strong> ${esc(i.texto)}</div>`).join("")}</div>`:"";
 const clave=t=>t.pax===0?"99":(piso(t.piso_id).entra||"98");
 const orden=(a,b)=>ORD[est(a)]-ORD[est(b)]||clave(a).localeCompare(clave(b))||piso(a.piso_id).nombre.localeCompare(piso(b.piso_id).nombre,"es");
-const info=t=>piso(t.piso_id).externo?`<div class="meta">Limpieza de empresa externa</div><div class="meta">${t.pax===0?"Ese día no entra nadie":"Entran "+(t.pax==null?"personas por confirmar":npers(t.pax))+" ese día"}</div>${t.salgo?`<div class="meta">Marcado como hecho a las ${hm(t.salgo)}</div>`:""}`:piso(t.piso_id).interno?`<div class="meta">Trabajo interno, no es un piso. Marca "Entro" al empezar y "Salgo" al terminar.</div>`:`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
+const info=t=>piso(t.piso_id).externo?`<div class="meta">Limpieza de empresa externa</div><div class="meta">${t.pax===0?entra(t):"Entran "+(t.pax==null?"personas por confirmar":npers(t.pax))+" ese día"}</div>${t.salgo?`<div class="meta">Marcado como hecho a las ${hm(t.salgo)}</div>`:""}`:piso(t.piso_id).interno?`<div class="meta">Trabajo interno, no es un piso. Marca "Entro" al empezar y "Salgo" al terminar.</div>`:`<div class="meta">${sale(t)}</div><div class="${t.pax!==0&&est(t)==="pend"?"urg":"meta"}">${entra(t)}</div>${hueco(t)?`<div class="meta">${hueco(t)}</div>`:""}${prev(t)?`<div class="meta">${prev(t)}</div>`:""}`;
 const INICIO="2026-10-12"; // primer día de uso real de la app: los días anteriores no se evalúan
 let miaFn=()=>true;
 function estDia(f){
@@ -298,7 +299,7 @@ function pintarPlan(delDia,dias){
     const e=est(t), z=piso(t.piso_id), d=desfase(t), q=pers(t.limpiadora_id);
     const ctl=z.externo?(D.yo.rol==="admin"?`<div class="acts">${t.salgo?`<button type="button" class="btn sec" data-a="corregir" data-id="${t.id}">Deshacer</button>`:`<button type="button" class="btn" data-a="hecho" data-id="${t.id}">Hecho</button><button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:""):gestiona(t)?`<div class="acts">${t.origen==="amenitiz"?`<span class="paxl">${t.pax===0?"No entra nadie":t.pax==null?"Personas por confirmar":npers(t.pax)} · Amenitiz</span>`:`<label class="paxl">Personas<input data-pax="${t.id}" id="pax-${t.id}" type="number" min="0" max="30" step="1" inputmode="numeric" placeholder="?" value="${t.pax==null?"":t.pax}" aria-label="Personas que entran en ${esc(z.nombre)}"></label>`}<select data-asig="${t.id}" id="asig-${t.id}" aria-label="Quién limpia ${esc(z.nombre)}" style="flex:1">${opcionesEquipo(t.limpiadora_id,t.fecha)}</select>${t.entro?`<button type="button" class="btn sec slim" data-a="corregir" data-id="${t.id}">Borrar horas</button>`:`<button type="button" class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`}</div>`:"";
     return `<article class="piso ${e}">
-      <div class="row"><div>${z.externo?'<div class="new">Empresa externa</div>':z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${t.pax===0?"sin entrada":t.pax+" pers."}</span>`}</div>${info(t)}
+      <div class="row"><div>${z.externo?'<div class="new">Empresa externa</div>':z.otra_zona?'<div class="new">Otra zona</div>':t.nueva?'<div class="new">Reserva nueva</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${badge(t)}</span>`}</div>${info(t)}
       ${horas(t)?`<div class="meta">${horas(t)}</div>`:""}${d!==null?`<div class="${d>0?"urg":"meta"}">${desTxt(d)}</div>`:""}${t.baja?'<div class="urg">Esta salida ya no figura en Amenitiz. Quítala si se ha cancelado.</div>':""}</div>
       <span class="pill">${z.externo?(t.salgo?"Hecho":"Empresa externa"):!t.limpiadora_id?"Sin asignar":e==="hecho"?"Listo para check-in":LAB[e]}</span></div>
       ${!gestiona(t)&&q?`<div class="meta">Limpia ${esc(q.nombre)}</div>`:""}${incs(t)}${ctl}</article>`;
@@ -332,7 +333,7 @@ function pintarMios(delDia,dias){
     const e=est(t), z=piso(t.piso_id), hoy=t.fecha===D.hoy;
     const b=!hoy?"":e==="pend"?`<button class="btn big" data-a="entro" data-id="${t.id}">Entro</button>${z.interno?`<button class="btn sec slim" data-a="quitar" data-id="${t.id}">${armado==="q"+t.id?"Confirmar":"Quitar"}</button>`:""}`:e==="dentro"?`<button class="btn big" data-a="salgo" data-id="${t.id}">Salgo</button>`:`<button class="btn sec" data-a="corregir" data-id="${t.id}">${armado==="c"+t.id?"Confirmar: borrar mis horas":"Me he equivocado"}</button>`;
     return `<article class="piso ${e}">
-      <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${t.pax===0?"sin entrada":t.pax+" pers."}</span>`}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
+      <div class="row"><div>${AV.some(a=>a.tarea_id===t.id&&a.tipo!=="quitado")?'<div class="new">Nuevo para ti</div>':t.nueva?'<div class="new">Añadido esta semana</div>':""}<div class="name">${esc(z.nombre)}${z.interno||t.pax==null?"":` <span class="huesp">${badge(t)}</span>`}</div>${info(t)}${horas(t)?`<div class="meta">${horas(t)}</div>`:""}</div><span class="pill">${LAB[e]}</span></div>
       ${incs(t)}${b?`<div class="acts">${b}</div>`:""}
       <form class="incform" data-id="${t.id}"><input id="inc-${t.id}" maxlength="500" aria-label="Incidencia en ${esc(z.nombre)}" placeholder="Escribe una incidencia"><button class="btn sec slim" type="submit">Enviar</button></form>
     </article>`;
